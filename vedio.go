@@ -41,9 +41,7 @@ func Register[T any](opts ...RegistrationOption) error {
 	typ := reflect.TypeFor[T]()
 	if rOpts.Generator == nil {
 		rOpts.Generator = func() (any, error) {
-
 			fn, ok := typ.MethodByName("Init")
-
 			if !ok {
 				return nil, fmt.Errorf("type %s does not implement an Init function", typ.Name())
 			}
