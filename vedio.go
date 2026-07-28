@@ -10,6 +10,7 @@ type (
 	LifeCycle           int
 	registrationOptions struct {
 		LifeCycle LifeCycle
+		Generator func() (any, error)
 	}
 	RegistrationOption func(*registrationOptions)
 	Scope              interface {
@@ -37,13 +38,17 @@ func Register[T any](opts ...RegistrationOption) error {
 	for _, opt := range opts {
 		opt(rOpts)
 	}
-
 	typ := reflect.TypeFor[T]()
+	if rOpts.Generator == nil {
+		rOpts.Generator = func() (any, error) {
 
-	fn, ok := typ.MethodByName("Init")
+			fn, ok := typ.MethodByName("Init")
 
-	if !ok {
-		return fmt.Errorf("type %s does not implement an Init function", typ.Name())
+			if !ok {
+				return nil, fmt.Errorf("type %s does not implement an Init function", typ.Name())
+			}
+			return instantiate(fn)
+		}
 	}
 
 	switch rOpts.LifeCycle {
@@ -55,7 +60,7 @@ func Register[T any](opts ...RegistrationOption) error {
 				var val any
 				var err error
 				once.Do(func() {
-					val, err = instantiate(fn)
+					val, err = rOpts.Generator()
 				})
 				return val, err
 			}
@@ -64,7 +69,7 @@ func Register[T any](opts ...RegistrationOption) error {
 	case TRANSIENT:
 		{
 			container[typ.Name()] = func() (any, error) {
-				return instantiate(fn)
+				return rOpts.Generator()
 			}
 		}
 	case SCOPED:
@@ -84,7 +89,7 @@ func Register[T any](opts ...RegistrationOption) error {
 						defer mut.Unlock()
 						delete(instanceManager, i)
 					})
-					val, err := instantiate(fn)
+					val, err := rOpts.Generator()
 					instanceManager[i] = func() (any, error) {
 						return val, err
 					}
