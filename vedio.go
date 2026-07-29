@@ -26,11 +26,11 @@ const (
 )
 
 var (
-	container map[string]any
+	container map[reflect.Type]map[string]any
 )
 
 func init() {
-	container = make(map[string]any)
+	container = make(map[reflect.Type]map[string]any)
 }
 
 func Register[T any](opts ...RegistrationOption) error {
@@ -54,7 +54,11 @@ func Register[T any](opts ...RegistrationOption) error {
 	case SINGLETON:
 		{
 			var once sync.Once
-			container[typ.Name()] = func() (any, error) {
+			if val, ok := container[typ]; !ok {
+				val = make(map[string]any)
+				container[typ] = val
+			}
+			container[typ]["default"] = func() (any, error) {
 				var val any
 				var err error
 				once.Do(func() {
@@ -66,15 +70,23 @@ func Register[T any](opts ...RegistrationOption) error {
 		}
 	case TRANSIENT:
 		{
-			container[typ.Name()] = func() (any, error) {
+			if val, ok := container[typ]; !ok {
+				val = make(map[string]any)
+				container[typ] = val
+			}
+			container[typ]["default"] = func() (any, error) {
 				return rOpts.Generator()
 			}
 		}
 	case SCOPED:
 		{
+			if val, ok := container[typ]; !ok {
+				val = make(map[string]any)
+				container[typ] = val
+			}
 			instanceManager := make(map[Scope]func() (any, error))
 			var mut sync.Mutex
-			container[typ.Name()] = func(i Scope) (any, error) {
+			container[typ]["default"] = func(i Scope) (any, error) {
 				if i.Closed() {
 					return nil, fmt.Errorf("attempt to resolve type %s on a closed session", typ.Name())
 				}
@@ -135,7 +147,12 @@ func instantiate(method reflect.Method) (any, error) {
 }
 
 func resolve(typ reflect.Type) (*reflect.Value, error) {
-	return nil, nil
+	val, ok := container[typ]
+	if !ok {
+		return nil, fmt.Errorf("type %s cannot be resolved", typ.Name())
+	}
+	rv := reflect.ValueOf(val["default"])
+	return &rv, nil
 }
 
 type Test struct{}
