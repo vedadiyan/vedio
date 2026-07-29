@@ -26,11 +26,11 @@ const (
 )
 
 var (
-	container map[reflect.Type]any
+	container map[reflect.Type]func(Scope) (any, error)
 )
 
 func init() {
-	container = make(map[reflect.Type]any)
+	container = make(map[reflect.Type]func(Scope) (any, error))
 }
 
 func Register[T any](opts ...RegistrationOption) error {
@@ -54,7 +54,7 @@ func Register[T any](opts ...RegistrationOption) error {
 	case SINGLETON:
 		{
 			var once sync.Once
-			container[typ] = func() (any, error) {
+			container[typ] = func(_ Scope) (any, error) {
 				var val any
 				var err error
 				once.Do(func() {
@@ -66,7 +66,7 @@ func Register[T any](opts ...RegistrationOption) error {
 		}
 	case TRANSIENT:
 		{
-			container[typ] = func() (any, error) {
+			container[typ] = func(_ Scope) (any, error) {
 				return rOpts.Generator()
 			}
 		}
@@ -98,6 +98,20 @@ func Register[T any](opts ...RegistrationOption) error {
 	}
 
 	return nil
+}
+
+func Resolve[T any](scope Scope) (T, error) {
+	typ := reflect.TypeFor[T]()
+	fn, ok := container[typ]
+	if !ok {
+		return reflect.New(typ).Elem().Interface().(T), fmt.Errorf("type %s could not be resolved", typ.Name())
+	}
+	val, err := fn(scope)
+	if err != nil {
+		return reflect.New(typ).Elem().Interface().(T), err
+	}
+
+	return val.(T), nil
 }
 
 func instantiate(method reflect.Method) (any, error) {
