@@ -11,7 +11,6 @@ type (
 	registrationOptions struct {
 		LifeCycle LifeCycle
 		Generator func() (any, error)
-		Name      string
 	}
 	RegistrationOption func(*registrationOptions)
 	Scope              interface {
@@ -24,8 +23,6 @@ const (
 	SINGLETON LifeCycle = iota
 	TRANSIENT
 	SCOPED
-
-	DEFAULT string = "default"
 )
 
 var (
@@ -40,7 +37,6 @@ func Register[T any](opts ...RegistrationOption) error {
 	typ := reflect.TypeFor[T]()
 	rOpts := &registrationOptions{
 		LifeCycle: SINGLETON,
-		Name:      DEFAULT,
 		Generator: func() (any, error) {
 			fn, ok := typ.MethodByName("Init")
 			if !ok {
