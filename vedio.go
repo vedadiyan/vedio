@@ -11,6 +11,7 @@ type (
 	registrationOptions struct {
 		LifeCycle LifeCycle
 		Generator func() (any, error)
+		Name      string
 	}
 	RegistrationOption func(*registrationOptions)
 	Scope              interface {
@@ -23,30 +24,33 @@ const (
 	SINGLETON LifeCycle = iota
 	TRANSIENT
 	SCOPED
+
+	DEFAULT string = "default"
 )
 
 var (
-	container map[reflect.Type]map[string]any
+	container map[reflect.Type]any
 )
 
 func init() {
-	container = make(map[reflect.Type]map[string]any)
+	container = make(map[reflect.Type]any)
 }
 
 func Register[T any](opts ...RegistrationOption) error {
-	rOpts := &registrationOptions{}
-	for _, opt := range opts {
-		opt(rOpts)
-	}
 	typ := reflect.TypeFor[T]()
-	if rOpts.Generator == nil {
-		rOpts.Generator = func() (any, error) {
+	rOpts := &registrationOptions{
+		LifeCycle: SINGLETON,
+		Name:      DEFAULT,
+		Generator: func() (any, error) {
 			fn, ok := typ.MethodByName("Init")
 			if !ok {
 				return nil, fmt.Errorf("type %s does not implement an Init function", typ.Name())
 			}
 			return instantiate(fn)
-		}
+		},
+	}
+	for _, opt := range opts {
+		opt(rOpts)
 	}
 
 	switch rOpts.LifeCycle {
@@ -54,11 +58,7 @@ func Register[T any](opts ...RegistrationOption) error {
 	case SINGLETON:
 		{
 			var once sync.Once
-			if val, ok := container[typ]; !ok {
-				val = make(map[string]any)
-				container[typ] = val
-			}
-			container[typ]["default"] = func() (any, error) {
+			container[typ] = func() (any, error) {
 				var val any
 				var err error
 				once.Do(func() {
@@ -70,23 +70,15 @@ func Register[T any](opts ...RegistrationOption) error {
 		}
 	case TRANSIENT:
 		{
-			if val, ok := container[typ]; !ok {
-				val = make(map[string]any)
-				container[typ] = val
-			}
-			container[typ]["default"] = func() (any, error) {
+			container[typ] = func() (any, error) {
 				return rOpts.Generator()
 			}
 		}
 	case SCOPED:
 		{
-			if val, ok := container[typ]; !ok {
-				val = make(map[string]any)
-				container[typ] = val
-			}
 			instanceManager := make(map[Scope]func() (any, error))
 			var mut sync.Mutex
-			container[typ]["default"] = func(i Scope) (any, error) {
+			container[typ] = func(i Scope) (any, error) {
 				if i.Closed() {
 					return nil, fmt.Errorf("attempt to resolve type %s on a closed session", typ.Name())
 				}
@@ -151,7 +143,7 @@ func resolve(typ reflect.Type) (*reflect.Value, error) {
 	if !ok {
 		return nil, fmt.Errorf("type %s cannot be resolved", typ.Name())
 	}
-	rv := reflect.ValueOf(val["default"])
+	rv := reflect.ValueOf(val)
 	return &rv, nil
 }
 
