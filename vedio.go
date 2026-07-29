@@ -12,7 +12,11 @@ type (
 		LifeCycle LifeCycle
 		Generator func() (any, error)
 	}
+	resolutionOptions struct {
+		Scope Scope
+	}
 	RegistrationOption func(*registrationOptions)
+	ResolutionOption   func(*resolutionOptions)
 	Scope              interface {
 		OnClose(func())
 		Closed() bool
@@ -100,17 +104,12 @@ func Register[T any](opts ...RegistrationOption) error {
 	return nil
 }
 
-func Resolve[T any](scope Scope) (T, error) {
+func Resolve[T any](opts ...ResolutionOption) (T, error) {
 	typ := reflect.TypeFor[T]()
-	fn, ok := container[typ]
-	if !ok {
-		return reflect.New(typ).Elem().Interface().(T), fmt.Errorf("type %s could not be resolved", typ.Name())
-	}
-	val, err := fn(scope)
+	val, err := resolve(typ, opts...)
 	if err != nil {
 		return reflect.New(typ).Elem().Interface().(T), err
 	}
-
 	return val.(T), nil
 }
 
@@ -135,7 +134,7 @@ func instantiate(method reflect.Method) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		args[i] = *val
+		args[i] = reflect.ValueOf(val)
 	}
 
 	out := method.Func.Call(args)
@@ -148,13 +147,20 @@ func instantiate(method reflect.Method) (any, error) {
 	return val.Interface(), nil
 }
 
-func resolve(typ reflect.Type) (*reflect.Value, error) {
-	val, ok := container[typ]
+func resolve(typ reflect.Type, opts ...ResolutionOption) (any, error) {
+	rOpts := &resolutionOptions{}
+	for _, opt := range opts {
+		opt(rOpts)
+	}
+	fn, ok := container[typ]
 	if !ok {
 		return nil, fmt.Errorf("type %s cannot be resolved", typ.Name())
 	}
-	rv := reflect.ValueOf(val)
-	return &rv, nil
+	val, err := fn(rOpts.Scope)
+	if err != nil {
+		return nil, err
+	}
+	return val, nil
 }
 
 type Test struct{}
