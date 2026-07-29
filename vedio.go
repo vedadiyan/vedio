@@ -20,6 +20,8 @@ type (
 	Scope              interface {
 		OnClose(func())
 		Closed() bool
+		Close()
+		Open()
 	}
 )
 
