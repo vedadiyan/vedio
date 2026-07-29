@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"reflect"
 	"sync"
 )
@@ -110,7 +111,8 @@ func Resolve[T any](opts ...ResolutionOption) (T, error) {
 	typ := reflect.TypeFor[T]()
 	val, err := resolve(typ, opts...)
 	if err != nil {
-		return reflect.New(typ).Elem().Interface().(T), err
+		var zero T
+		return zero, err
 	}
 	return val.(T), nil
 }
@@ -167,10 +169,18 @@ func resolve(typ reflect.Type, opts ...ResolutionOption) (any, error) {
 
 type Test struct{}
 
-func (test *Test) Init() error {
+func (test Test) Init() error {
 	return nil
 }
 
 func main() {
 	Register[Test]()
+
+	val, err := Resolve[Test]()
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	_ = val
 }
