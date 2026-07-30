@@ -52,8 +52,13 @@ func (err VedioError) Error() string {
 }
 
 func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type) error {
-	if interfaceType.Kind() == reflect.Interface && !implementationType.Implements(interfaceType) {
+	if implementationType.Kind() == reflect.Interface {
 		return ErrTypeMismatch
+	}
+	if interfaceType.Kind() == reflect.Interface && !implementationType.Implements(interfaceType) {
+		if !reflect.PointerTo(implementationType).Implements(interfaceType) {
+			return ErrTypeMismatch
+		}
 	}
 	if interfaceType.Kind() != reflect.Interface && interfaceType != implementationType {
 		return ErrTypeMismatch

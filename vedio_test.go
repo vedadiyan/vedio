@@ -6,10 +6,19 @@ import (
 )
 
 type (
+	testCase struct {
+		name string // description of this test case
+		// Named input parameters for target function.
+		interfaceType      reflect.Type
+		implementationType reflect.Type
+		wantErr            bool
+	}
+
 	mockInterface interface {
 		Test() string
 	}
-	mockImplementation struct{}
+	mockImplementation  struct{}
+	wrongImplementation struct{}
 )
 
 func (x *mockImplementation) Init() {
@@ -21,19 +30,18 @@ func (x *mockImplementation) Test() string {
 }
 
 func Test_assertTypeMatch(t *testing.T) {
-	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for target function.
-		interfaceType      reflect.Type
-		implementationType reflect.Type
-		wantErr            bool
-	}{
-		struct {
-			name               string
-			interfaceType      reflect.Type
-			implementationType reflect.Type
-			wantErr            bool
-		}{"correct implementation - not pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[mockImplementation](), false},
+	tests := []testCase{
+		{"correct implementation - not pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[mockImplementation](), false},
+		{"correct implementation - pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[*mockImplementation](), false},
+		{"correct implementation - struct to struct not pointer", reflect.TypeFor[mockImplementation](), reflect.TypeFor[mockImplementation](), false},
+		{"correct implementation - struct to struct pointer", reflect.TypeFor[*mockImplementation](), reflect.TypeFor[*mockImplementation](), false},
+		{"wrong implementation - not pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[wrongImplementation](), true},
+		{"wrong implementation - pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[*wrongImplementation](), true},
+		{"wrong usage - interface to interface", reflect.TypeFor[mockInterface](), reflect.TypeFor[mockInterface](), true},
+		{"wrong usage - pointer to interface", reflect.TypeFor[*mockInterface](), reflect.TypeFor[mockInterface](), true},
+		{"wrong usage - interface to pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[*mockInterface](), true},
+		{"wrong usage - struct to pointer", reflect.TypeFor[mockImplementation](), reflect.TypeFor[*mockImplementation](), true},
+		{"wrong usage - pointer to struct", reflect.TypeFor[*mockImplementation](), reflect.TypeFor[mockImplementation](), true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
