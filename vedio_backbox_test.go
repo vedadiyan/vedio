@@ -14,9 +14,8 @@ type (
 	ptrReceiver struct {
 		id string
 	}
-	ptrReceiverComplex  struct{}
-	valueReceiver       struct{}
-	wrongImplementation struct{}
+	ptrReceiverComplex struct{}
+	valueReceiver      struct{}
 )
 
 func (x *ptrReceiver) Init() error {
