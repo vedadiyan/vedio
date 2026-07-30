@@ -24,12 +24,18 @@ type (
 		Close()
 		Open()
 	}
+	VedioError string
 )
 
 const (
 	SINGLETON LifeCycle = iota
 	TRANSIENT
 	SCOPED
+
+	ErrTypeNotFound    VedioError = "type could not found"
+	ErrTypeMismatch    VedioError = "type mismatch"
+	ErrUnsupportedType VedioError = "type does not implement `Init` method"
+	ErrClosedScope     VedioError = "attempt to resolve type on a closed scope"
 )
 
 var (
@@ -39,6 +45,10 @@ var (
 
 func init() {
 	container = make(map[reflect.Type]Resolver)
+}
+
+func (err VedioError) Error() string {
+	return string(err)
 }
 
 func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type) error {
