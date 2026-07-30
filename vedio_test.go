@@ -208,7 +208,7 @@ func Test_resolve(t *testing.T) {
 	defer delete(container, errorKey)
 
 	tests := []testCase{
-		{"correct usage", correctKey, nil, true, false},
+		{"correct usage - simple", correctKey, nil, true, false},
 		{"correct usage - scoped", scopedKey, []ResolutionOption{ScopeOpt(NewScope())}, true, false},
 		{"correct usage - expected error", errorKey, nil, nil, true},
 		{"wrong usage - unresolved type", incorrectKey, nil, nil, true},
