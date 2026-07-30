@@ -107,7 +107,7 @@ func TestNewRegistrationContext(t *testing.T) {
 			return newRegistrationContext[iinterface, *ptrReceiver](GeneratorOpt(generatorPointer))
 		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
 
-		{"wronf usage -  no init method", func() (*registrationContext, error) {
+		{"wrong usage -  no init method", func() (*registrationContext, error) {
 			return newRegistrationContext[iinterface, valueReceiver]()
 		}, nil, true},
 	}
