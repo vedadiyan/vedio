@@ -19,6 +19,7 @@ type (
 	RegistrationOption func(*RegistrationContext)
 	ResolutionOption   func(*ResolutionContext)
 	Scope              interface {
+		ID() string
 		OnClose(func())
 		Closed() bool
 		Close()
@@ -35,6 +36,7 @@ const (
 	ErrTypeNotFound      VedioError = "type could not found"
 	ErrNilType           VedioError = "nil type detected"
 	ErrExpectationFailed VedioError = "expectation failed"
+	ErrInvalidOperation  VedioError = "invalid operation"
 	ErrTypeMismatch      VedioError = "type mismatch"
 	ErrUnsupportedType   VedioError = "type does not implement `Init` method"
 	ErrClosedScope       VedioError = "attempt to resolve type on a closed scope"
@@ -135,23 +137,26 @@ func (r *RegistrationContext) createTransient() Resolver {
 }
 
 func (r *RegistrationContext) createScoped() Resolver {
-	instanceManager := make(map[Scope]func() (any, error))
+	instanceManager := make(map[string]func() (any, error))
 	var instanceManagerMut sync.Mutex
 	return func(rc *ResolutionContext) (any, error) {
+		if rc == nil || rc.Scope == nil {
+			return nil, ErrInvalidOperation
+		}
 		if rc.Scope.Closed() {
 			return nil, ErrClosedScope
 		}
 		instanceManagerMut.Lock()
 		defer instanceManagerMut.Unlock()
-		val, ok := instanceManager[rc.Scope]
+		val, ok := instanceManager[rc.Scope.ID()]
 		if !ok {
 			defer rc.Scope.OnClose(func() {
 				instanceManagerMut.Lock()
 				defer instanceManagerMut.Unlock()
-				delete(instanceManager, rc.Scope)
+				delete(instanceManager, rc.Scope.ID())
 			})
 			val, err := r.generator()
-			instanceManager[rc.Scope] = func() (any, error) {
+			instanceManager[rc.Scope.ID()] = func() (any, error) {
 				return val, err
 			}
 		}
