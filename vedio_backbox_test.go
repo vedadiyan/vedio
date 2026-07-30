@@ -109,3 +109,25 @@ func TestSingletonNonPtr(t *testing.T) {
 		return
 	}
 }
+
+func TestSingletonNonPtrAsPtr(t *testing.T) {
+	if err := vedio.RegisterFor[iinterface, *valueReceiver](); err != nil {
+		t.Error(err)
+		return
+	}
+	v1, err := vedio.Resolve[iinterface]()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	v2, err := vedio.Resolve[iinterface]()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v1.Test() != v2.Test() {
+		t.Error("expectation failed")
+		return
+	}
+}
