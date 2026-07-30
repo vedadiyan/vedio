@@ -1,4 +1,4 @@
-package main
+package vedio
 
 import (
 	"reflect"
