@@ -60,7 +60,7 @@ func Test_assertTypeMatch(t *testing.T) {
 				return
 			}
 			if tt.wantErr {
-				t.Fatal("assertTypeMatch() succeeded unexpectedly")
+				t.Errorf("assertTypeMatch() succeeded unexpectedly")
 			}
 		})
 	}
@@ -112,10 +112,11 @@ func TestNewRegistrationContext(t *testing.T) {
 				return
 			}
 			if tt.wantErr {
-				t.Fatal("newRegistrationContext succeeded unexpectedly")
+				t.Errorf("newRegistrationContext succeeded unexpectedly")
+				return
 			}
 			if !tt.test(res) {
-				t.Fatal("newRegistrationContext succeeded unexpectedly")
+				t.Errorf("newRegistrationContext succeeded unexpectedly")
 			}
 		})
 	}
@@ -145,7 +146,8 @@ func Test_instantiate(t *testing.T) {
 				return
 			}
 			if tt.wantErr {
-				t.Fatal("instantiate() succeeded unexpectedly")
+				t.Errorf("instantiate() succeeded unexpectedly")
+				return
 			}
 			if !reflect.ValueOf(got).Type().AssignableTo(reflect.ValueOf(tt.want).Type()) {
 				t.Errorf("instantiate() = %v, want %v", got, tt.want)
