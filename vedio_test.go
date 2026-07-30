@@ -10,6 +10,7 @@ type (
 		Test() string
 	}
 	ptrReceiver         struct{}
+	ptrReceiverComplex  struct{}
 	valueReceiver       struct{}
 	wrongImplementation struct{}
 )
@@ -19,6 +20,14 @@ func (x *ptrReceiver) Init() error {
 }
 
 func (x *ptrReceiver) Test() string {
+	return "ok"
+}
+
+func (x *ptrReceiverComplex) Init(str string) error {
+	return nil
+}
+
+func (x *ptrReceiverComplex) Test() string {
 	return "ok"
 }
 
@@ -131,10 +140,17 @@ func Test_instantiate(t *testing.T) {
 		wantErr bool
 	}
 
-	method, _ := reflect.TypeFor[*ptrReceiver]().MethodByName("Init")
+	simpleMethpd, _ := reflect.TypeFor[*ptrReceiver]().MethodByName("Init")
+	complexMethpd, _ := reflect.TypeFor[*ptrReceiverComplex]().MethodByName("Init")
+	key := reflect.TypeFor[string]()
+	container[key] = func(rc *resolutionContext) (any, error) {
+		return "ok", nil
+	}
+	defer delete(container, key)
 
 	tests := []testCase{
-		{"correct usage", method, &ptrReceiver{}, false},
+		{"correct usage - simple", simpleMethpd, &ptrReceiver{}, false},
+		{"correct usage - complex", complexMethpd, &ptrReceiverComplex{}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
