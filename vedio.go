@@ -23,7 +23,6 @@ type (
 		OnClose(func())
 		Closed() bool
 		Close()
-		Open()
 	}
 	VedioError string
 )
