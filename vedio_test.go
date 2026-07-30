@@ -14,8 +14,8 @@ type (
 	wrongImplementation struct{}
 )
 
-func (x *ptrReceiver) Init() {
-
+func (x *ptrReceiver) Init() error {
+	return nil
 }
 
 func (x *ptrReceiver) Test() string {
@@ -116,6 +116,39 @@ func TestNewRegistrationContext(t *testing.T) {
 			}
 			if !tt.test(res) {
 				t.Fatal("newRegistrationContext succeeded unexpectedly")
+			}
+		})
+	}
+}
+
+func Test_instantiate(t *testing.T) {
+
+	type testCase struct {
+		name    string
+		method  reflect.Method
+		want    any
+		wantErr bool
+	}
+
+	method, _ := reflect.TypeFor[*ptrReceiver]().MethodByName("Init")
+
+	tests := []testCase{
+		{"correct usage", method, &ptrReceiver{}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotErr := instantiate(tt.method)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("instantiate() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("instantiate() succeeded unexpectedly")
+			}
+			if !reflect.ValueOf(got).Type().AssignableTo(reflect.ValueOf(tt.want).Type()) {
+				t.Errorf("instantiate() = %v, want %v", got, tt.want)
 			}
 		})
 	}
