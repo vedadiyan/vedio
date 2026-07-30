@@ -153,13 +153,11 @@ func Resolve[T any](opts ...ResolutionOption) (T, error) {
 func instantiate(method reflect.Method) (any, error) {
 	typ := method.Type
 	errN := -1
-	iter := 0
-	for i := range typ.Outs() {
-		if i.AssignableTo(reflect.TypeFor[error]()) {
-			errN = iter
-			break
+	if typ.NumOut() > 0 {
+		pos := typ.NumOut() - 1
+		if typ.Out(pos).AssignableTo(reflect.TypeFor[error]()) {
+			errN = pos
 		}
-		iter++
 	}
 
 	inN := typ.NumIn()
