@@ -111,9 +111,11 @@ func NewRegistrationContext[I any, T any](opts ...RegistrationOption) (*Registra
 }
 
 func (r *RegistrationContext) createSingleton() Resolver {
-	var once sync.Once
-	var val any
-	var err error
+	var (
+		once sync.Once
+		val  any
+		err  error
+	)
 	return func(_ *ResolutionContext) (any, error) {
 		once.Do(func() {
 			val, err = r.generator()
