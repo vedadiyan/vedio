@@ -6,18 +6,18 @@ import (
 )
 
 type (
-	LifeCycle           int
-	Resolver            func(*ResolutionContext) (any, error)
-	RegistrationContext struct {
+	LifeCycle            int
+	Resolver             func(*_ResolutionContext) (any, error)
+	_RegistrationContext struct {
 		typ       reflect.Type
 		lifeCycle LifeCycle
 		generator func() (any, error)
 	}
-	ResolutionContext struct {
+	_ResolutionContext struct {
 		Scope Scope
 	}
-	RegistrationOption func(*RegistrationContext)
-	ResolutionOption   func(*ResolutionContext)
+	RegistrationOption func(*_RegistrationContext)
+	ResolutionOption   func(*_ResolutionContext)
 	Scope              interface {
 		ID() string
 		OnClose(func())
@@ -56,13 +56,13 @@ func (err VedioError) Error() string {
 }
 
 func LifeCycleOpt(lifeCycle LifeCycle) RegistrationOption {
-	return func(rc *RegistrationContext) {
+	return func(rc *_RegistrationContext) {
 		rc.lifeCycle = lifeCycle
 	}
 }
 
 func GeneratorOpt[T any](generator func() (T, error)) RegistrationOption {
-	return func(rc *RegistrationContext) {
+	return func(rc *_RegistrationContext) {
 		rc.generator = func() (any, error) {
 			return generator()
 		}
@@ -87,14 +87,14 @@ func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type
 	return nil
 }
 
-func NewRegistrationContext[I any, T any](opts ...RegistrationOption) (*RegistrationContext, error) {
+func newRegistrationContext[I any, T any](opts ...RegistrationOption) (*_RegistrationContext, error) {
 	iType := reflect.TypeFor[I]()
 	tType := reflect.TypeFor[T]()
 	if err := assertTypeMatch(iType, tType); err != nil {
 		return nil, err
 	}
 
-	out := &RegistrationContext{
+	out := &_RegistrationContext{
 		typ:       iType,
 		lifeCycle: SINGLETON,
 	}
@@ -116,13 +116,13 @@ func NewRegistrationContext[I any, T any](opts ...RegistrationOption) (*Registra
 	return out, nil
 }
 
-func (r *RegistrationContext) createSingleton() Resolver {
+func (r *_RegistrationContext) createSingleton() Resolver {
 	var (
 		once sync.Once
 		val  any
 		err  error
 	)
-	return func(_ *ResolutionContext) (any, error) {
+	return func(_ *_ResolutionContext) (any, error) {
 		once.Do(func() {
 			val, err = r.generator()
 		})
@@ -130,16 +130,16 @@ func (r *RegistrationContext) createSingleton() Resolver {
 	}
 }
 
-func (r *RegistrationContext) createTransient() Resolver {
-	return func(_ *ResolutionContext) (any, error) {
+func (r *_RegistrationContext) createTransient() Resolver {
+	return func(_ *_ResolutionContext) (any, error) {
 		return r.generator()
 	}
 }
 
-func (r *RegistrationContext) createScoped() Resolver {
+func (r *_RegistrationContext) createScoped() Resolver {
 	instanceManager := make(map[string]func() (any, error))
 	var instanceManagerMut sync.Mutex
-	return func(rc *ResolutionContext) (any, error) {
+	return func(rc *_ResolutionContext) (any, error) {
 		if rc == nil || rc.Scope == nil {
 			return nil, ErrInvalidOperation
 		}
@@ -164,7 +164,7 @@ func (r *RegistrationContext) createScoped() Resolver {
 	}
 }
 
-func (r *RegistrationContext) Register() {
+func (r *_RegistrationContext) register() {
 	mut.Lock()
 	defer mut.Unlock()
 	switch r.lifeCycle {
@@ -181,18 +181,6 @@ func (r *RegistrationContext) Register() {
 			container[r.typ] = r.createScoped()
 		}
 	}
-}
-
-func Resolve[T any](opts ...ResolutionOption) (T, error) {
-	typ := reflect.TypeFor[T]()
-	val, err := resolve(typ, opts...)
-	if err != nil {
-		return Zero[T](), err
-	}
-	if out, ok := val.(T); ok {
-		return out, nil
-	}
-	return Zero[T](), ErrTypeMismatch
 }
 
 func instantiate(method reflect.Method) (any, error) {
@@ -228,7 +216,7 @@ func instantiate(method reflect.Method) (any, error) {
 }
 
 func resolve(typ reflect.Type, opts ...ResolutionOption) (any, error) {
-	rOpts := &ResolutionContext{}
+	rOpts := &_ResolutionContext{}
 	for _, opt := range opts {
 		opt(rOpts)
 	}
@@ -241,6 +229,31 @@ func resolve(typ reflect.Type, opts ...ResolutionOption) (any, error) {
 		return nil, err
 	}
 	return val, nil
+}
+
+func RegisterFor[T any, R any](opts ...RegistrationOption) error {
+	r, err := newRegistrationContext[T, R](opts...)
+	if err != nil {
+		return err
+	}
+	r.register()
+	return nil
+}
+
+func Register[T any](opts ...RegistrationOption) error {
+	return RegisterFor[T, T](opts...)
+}
+
+func Resolve[T any](opts ...ResolutionOption) (T, error) {
+	typ := reflect.TypeFor[T]()
+	val, err := resolve(typ, opts...)
+	if err != nil {
+		return Zero[T](), err
+	}
+	if out, ok := val.(T); ok {
+		return out, nil
+	}
+	return Zero[T](), ErrTypeMismatch
 }
 
 func Zero[T any]() T {
