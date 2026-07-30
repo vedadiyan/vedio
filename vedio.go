@@ -53,6 +53,20 @@ func (err VedioError) Error() string {
 	return string(err)
 }
 
+func LifeCycleOpt(lifeCycle LifeCycle) RegistrationOption {
+	return func(rc *RegistrationContext) {
+		rc.lifeCycle = lifeCycle
+	}
+}
+
+func GeneratorOpt[T any](generator func() (T, error)) RegistrationOption {
+	return func(rc *RegistrationContext) {
+		rc.generator = func() (any, error) {
+			return generator()
+		}
+	}
+}
+
 func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type) error {
 	if interfaceType == nil || implementationType == nil {
 		return ErrNilType
