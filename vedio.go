@@ -88,9 +88,9 @@ func NewRegistrationContext[I any, T any](opts ...RegistrationOption) (*Registra
 
 func (r *RegistrationContext) createSingleton() Resolver {
 	var once sync.Once
+	var val any
+	var err error
 	return func(_ *ResolutionContext) (any, error) {
-		var val any
-		var err error
 		once.Do(func() {
 			val, err = r.generator()
 		})
@@ -106,18 +106,18 @@ func (r *RegistrationContext) createTransient() Resolver {
 
 func (r *RegistrationContext) createScoped() Resolver {
 	instanceManager := make(map[Scope]func() (any, error))
-	var mut sync.Mutex
+	var instanceManagerMut sync.Mutex
 	return func(rc *ResolutionContext) (any, error) {
 		if rc.Scope.Closed() {
 			return nil, ErrClosedScope
 		}
-		mut.Lock()
-		defer mut.Unlock()
+		instanceManagerMut.Lock()
+		defer instanceManagerMut.Unlock()
 		val, ok := instanceManager[rc.Scope]
 		if !ok {
-			rc.Scope.OnClose(func() {
-				mut.Lock()
-				defer mut.Unlock()
+			defer rc.Scope.OnClose(func() {
+				instanceManagerMut.Lock()
+				defer instanceManagerMut.Unlock()
 				delete(instanceManager, rc.Scope)
 			})
 			val, err := r.generator()
