@@ -96,6 +96,7 @@ func NewRegistrationContext[I any, T any](opts ...RegistrationOption) (*Registra
 		typ:       iType,
 		lifeCycle: SINGLETON,
 	}
+
 	for _, opt := range opts {
 		opt(out)
 	}
