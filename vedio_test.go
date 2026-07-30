@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -167,6 +168,65 @@ func Test_instantiate(t *testing.T) {
 			}
 			if !reflect.ValueOf(got).Type().AssignableTo(reflect.ValueOf(tt.want).Type()) {
 				t.Errorf("instantiate() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_resolve(t *testing.T) {
+
+	type testCase struct {
+		name    string
+		typ     reflect.Type
+		opts    []ResolutionOption
+		want    any
+		wantErr bool
+	}
+
+	type CorrectKey bool
+	type IncorrectKey bool
+	type ErrorKey bool
+	type ScopedKey bool
+
+	correctKey := reflect.TypeFor[CorrectKey]()
+	incorrectKey := reflect.TypeFor[IncorrectKey]()
+	errorKey := reflect.TypeFor[ErrorKey]()
+	scopedKey := reflect.TypeFor[ScopedKey]()
+	container[correctKey] = func(rc *resolutionContext) (any, error) {
+		return true, nil
+	}
+	container[errorKey] = func(rc *resolutionContext) (any, error) {
+		return nil, fmt.Errorf("expected error")
+	}
+	container[scopedKey] = func(rc *resolutionContext) (any, error) {
+		if rc == nil || rc.Scope == nil || rc.Scope.ID() == "" {
+			return nil, fmt.Errorf("scoped is null")
+		}
+		return true, nil
+	}
+	defer delete(container, correctKey)
+	defer delete(container, errorKey)
+
+	tests := []testCase{
+		{"correct usage", correctKey, nil, true, false},
+		{"correct usage - scoped", scopedKey, []ResolutionOption{ScopeOpt(NewScope())}, true, false},
+		{"correct usage - expected error", errorKey, nil, nil, true},
+		{"wrong usage - unresolved type", incorrectKey, nil, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, gotErr := resolve(tt.typ, tt.opts...)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("resolve() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("resolve() succeeded unexpectedly")
+			}
+			if !reflect.ValueOf(got).Type().AssignableTo(reflect.ValueOf(tt.want).Type()) {
+				t.Errorf("resolve() = %v, want %v", got, tt.want)
 			}
 		})
 	}

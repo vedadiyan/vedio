@@ -3,6 +3,9 @@ package main
 import (
 	"reflect"
 	"sync"
+	"sync/atomic"
+
+	"github.com/google/uuid"
 )
 
 type (
@@ -13,16 +16,21 @@ type (
 		generator func() (any, error)
 	}
 	resolutionContext struct {
-		Scope Scope
+		Scope Scoped
 	}
 	LifeCycle          int
 	RegistrationOption func(*registrationContext)
 	ResolutionOption   func(*resolutionContext)
-	Scope              interface {
+	Scoped             interface {
 		ID() string
 		OnClose(func())
 		Closed() bool
 		Close()
+	}
+	Scope struct {
+		id        string
+		callBacks []func()
+		closed    atomic.Bool
 	}
 	VedioError string
 )
@@ -65,6 +73,12 @@ func GeneratorOpt[T any](generator func() (T, error)) RegistrationOption {
 		rc.generator = func() (any, error) {
 			return generator()
 		}
+	}
+}
+
+func ScopeOpt(scope Scoped) ResolutionOption {
+	return func(rc *resolutionContext) {
+		rc.Scope = scope
 	}
 }
 
@@ -183,6 +197,33 @@ func (r *registrationContext) register() {
 			container[r.typ] = r.createScoped()
 		}
 	}
+}
+
+func NewScope() Scoped {
+	return &Scope{
+		id: uuid.New().String(),
+	}
+}
+
+func (scope *Scope) ID() string {
+	return scope.id
+}
+
+func (scope *Scope) OnClose(fn func()) {
+	scope.callBacks = append(scope.callBacks, fn)
+}
+
+func (scope *Scope) Close() {
+	if !scope.closed.CompareAndSwap(false, true) {
+		return
+	}
+	for _, cb := range scope.callBacks {
+		cb()
+	}
+}
+
+func (scope *Scope) Closed() bool {
+	return scope.closed.Load()
 }
 
 func instantiate(method reflect.Method) (any, error) {
