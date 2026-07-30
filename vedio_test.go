@@ -14,34 +14,41 @@ type (
 		wantErr            bool
 	}
 
-	mockInterface interface {
+	iinterface interface {
 		Test() string
 	}
-	mockImplementation  struct{}
+	ptrReceiver         struct{}
+	valueReceiver       struct{}
 	wrongImplementation struct{}
 )
 
-func (x *mockImplementation) Init() {
+func (x *ptrReceiver) Init() {
 
 }
 
-func (x *mockImplementation) Test() string {
+func (x *ptrReceiver) Test() string {
+	return "ok"
+}
+
+func (x valueReceiver) Test() string {
 	return "ok"
 }
 
 func Test_assertTypeMatch(t *testing.T) {
 	tests := []testCase{
-		{"correct implementation - not pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[mockImplementation](), false},
-		{"correct implementation - pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[*mockImplementation](), false},
-		{"correct implementation - struct to struct not pointer", reflect.TypeFor[mockImplementation](), reflect.TypeFor[mockImplementation](), false},
-		{"correct implementation - struct to struct pointer", reflect.TypeFor[*mockImplementation](), reflect.TypeFor[*mockImplementation](), false},
-		{"wrong implementation - not pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[wrongImplementation](), true},
-		{"wrong implementation - pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[*wrongImplementation](), true},
-		{"wrong usage - interface to interface", reflect.TypeFor[mockInterface](), reflect.TypeFor[mockInterface](), true},
-		{"wrong usage - pointer to interface", reflect.TypeFor[*mockInterface](), reflect.TypeFor[mockInterface](), true},
-		{"wrong usage - interface to pointer", reflect.TypeFor[mockInterface](), reflect.TypeFor[*mockInterface](), true},
-		{"wrong usage - struct to pointer", reflect.TypeFor[mockImplementation](), reflect.TypeFor[*mockImplementation](), true},
-		{"wrong usage - pointer to struct", reflect.TypeFor[*mockImplementation](), reflect.TypeFor[mockImplementation](), true},
+		{"correct implementation - not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[ptrReceiver](), false},
+		{"correct implementation - pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*ptrReceiver](), false},
+		{"correct implementation - struct to struct not pointer", reflect.TypeFor[ptrReceiver](), reflect.TypeFor[ptrReceiver](), false},
+		{"correct implementation - struct to struct pointer", reflect.TypeFor[*ptrReceiver](), reflect.TypeFor[*ptrReceiver](), false},
+		{"correct implementation - value receiver not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[valueReceiver](), false},
+		{"correct implementation - value receiver pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*valueReceiver](), false},
+		{"wrong implementation - not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[wrongImplementation](), true},
+		{"wrong implementation - pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*wrongImplementation](), true},
+		{"wrong usage - interface to interface", reflect.TypeFor[iinterface](), reflect.TypeFor[iinterface](), true},
+		{"wrong usage - pointer to interface", reflect.TypeFor[*iinterface](), reflect.TypeFor[iinterface](), true},
+		{"wrong usage - interface to pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*iinterface](), true},
+		{"wrong usage - struct to pointer", reflect.TypeFor[ptrReceiver](), reflect.TypeFor[*ptrReceiver](), true},
+		{"wrong usage - pointer to struct", reflect.TypeFor[*ptrReceiver](), reflect.TypeFor[ptrReceiver](), true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
