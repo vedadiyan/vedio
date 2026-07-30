@@ -32,11 +32,12 @@ const (
 	TRANSIENT
 	SCOPED
 
-	ErrTypeNotFound    VedioError = "type could not found"
-	ErrNilType         VedioError = "nil type detected"
-	ErrTypeMismatch    VedioError = "type mismatch"
-	ErrUnsupportedType VedioError = "type does not implement `Init` method"
-	ErrClosedScope     VedioError = "attempt to resolve type on a closed scope"
+	ErrTypeNotFound      VedioError = "type could not found"
+	ErrNilType           VedioError = "nil type detected"
+	ErrExpectationFailed VedioError = "expectation failed"
+	ErrTypeMismatch      VedioError = "type mismatch"
+	ErrUnsupportedType   VedioError = "type does not implement `Init` method"
+	ErrClosedScope       VedioError = "attempt to resolve type on a closed scope"
 )
 
 var (
@@ -57,7 +58,7 @@ func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type
 		return ErrNilType
 	}
 	if implementationType.Kind() == reflect.Interface {
-		return ErrTypeMismatch
+		return ErrExpectationFailed
 	}
 	if interfaceType.Kind() == reflect.Interface && !implementationType.Implements(interfaceType) {
 		if !reflect.PointerTo(implementationType).Implements(interfaceType) {
