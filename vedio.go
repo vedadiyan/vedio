@@ -6,8 +6,7 @@ import (
 )
 
 type (
-	LifeCycle            int
-	Resolver             func(*_ResolutionContext) (any, error)
+	_Resolver            func(*_ResolutionContext) (any, error)
 	_RegistrationContext struct {
 		typ       reflect.Type
 		lifeCycle LifeCycle
@@ -16,6 +15,7 @@ type (
 	_ResolutionContext struct {
 		Scope Scope
 	}
+	LifeCycle          int
 	RegistrationOption func(*_RegistrationContext)
 	ResolutionOption   func(*_ResolutionContext)
 	Scope              interface {
@@ -43,12 +43,12 @@ const (
 )
 
 var (
-	container map[reflect.Type]Resolver
+	container map[reflect.Type]_Resolver
 	mut       sync.Mutex
 )
 
 func init() {
-	container = make(map[reflect.Type]Resolver)
+	container = make(map[reflect.Type]_Resolver)
 }
 
 func (err VedioError) Error() string {
@@ -116,7 +116,7 @@ func newRegistrationContext[I any, T any](opts ...RegistrationOption) (*_Registr
 	return out, nil
 }
 
-func (r *_RegistrationContext) createSingleton() Resolver {
+func (r *_RegistrationContext) createSingleton() _Resolver {
 	var (
 		once sync.Once
 		val  any
@@ -130,13 +130,13 @@ func (r *_RegistrationContext) createSingleton() Resolver {
 	}
 }
 
-func (r *_RegistrationContext) createTransient() Resolver {
+func (r *_RegistrationContext) createTransient() _Resolver {
 	return func(_ *_ResolutionContext) (any, error) {
 		return r.generator()
 	}
 }
 
-func (r *_RegistrationContext) createScoped() Resolver {
+func (r *_RegistrationContext) createScoped() _Resolver {
 	instanceManager := make(map[string]func() (any, error))
 	var instanceManagerMut sync.Mutex
 	return func(rc *_ResolutionContext) (any, error) {
