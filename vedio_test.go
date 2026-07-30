@@ -65,3 +65,58 @@ func Test_assertTypeMatch(t *testing.T) {
 		})
 	}
 }
+
+func TestNewRegistrationContext(t *testing.T) {
+	type testCase struct {
+		name    string
+		fn      func() (*registrationContext, error)
+		test    func(*registrationContext) bool
+		wantErr bool
+	}
+
+	generatorNonPointer := func() (ptrReceiver, error) { return ptrReceiver{}, nil }
+
+	generatorPointer := func() (valueReceiver, error) { return valueReceiver{}, nil }
+
+	tests := []testCase{
+		{"correct usage - no options not pointer", func() (*registrationContext, error) {
+			return newRegistrationContext[iinterface, ptrReceiver]()
+		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
+		{"correct usage - lifecyle option not pointer", func() (*registrationContext, error) {
+			return newRegistrationContext[iinterface, ptrReceiver](LifeCycleOpt(TRANSIENT))
+		}, func(rc *registrationContext) bool { return rc.lifeCycle == TRANSIENT && rc.generator != nil }, false},
+		{"correct usage - generator option not pointer", func() (*registrationContext, error) {
+			return newRegistrationContext[iinterface, ptrReceiver](GeneratorOpt(generatorNonPointer))
+		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
+		{"correct usage - no options pointer", func() (*registrationContext, error) {
+			return newRegistrationContext[iinterface, *ptrReceiver]()
+		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
+		{"correct usage - lifecyle option pointer", func() (*registrationContext, error) {
+			return newRegistrationContext[iinterface, *ptrReceiver](LifeCycleOpt(TRANSIENT))
+		}, func(rc *registrationContext) bool { return rc.lifeCycle == TRANSIENT && rc.generator != nil }, false},
+		{"correct usage -  generator option pointer", func() (*registrationContext, error) {
+			return newRegistrationContext[iinterface, *ptrReceiver](GeneratorOpt(generatorPointer))
+		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
+
+		{"wronf usage -  no init method", func() (*registrationContext, error) {
+			return newRegistrationContext[iinterface, valueReceiver]()
+		}, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := tt.fn()
+			if err != nil {
+				if !tt.wantErr {
+					t.Errorf("newRegistrationContext failed: %v", err)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("newRegistrationContext succeeded unexpectedly")
+			}
+			if !tt.test(res) {
+				t.Fatal("newRegistrationContext succeeded unexpectedly")
+			}
+		})
+	}
+}

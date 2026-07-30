@@ -105,7 +105,10 @@ func newRegistrationContext[I any, T any](opts ...RegistrationOption) (*registra
 	if out.generator == nil {
 		fn, ok := tType.MethodByName("Init")
 		if !ok {
-			return nil, ErrUnsupportedType
+			fn, ok = reflect.PointerTo(tType).MethodByName("Init")
+			if !ok {
+				return nil, ErrUnsupportedType
+			}
 		}
 		out.generator = func() (any, error) {
 			return instantiate(fn)
