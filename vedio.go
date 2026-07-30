@@ -222,6 +222,7 @@ func (scope *Scope) Close() {
 	for _, cb := range scope.callBacks {
 		cb()
 	}
+	scope.callBacks = nil
 }
 
 func (scope *Scope) Closed() bool {
