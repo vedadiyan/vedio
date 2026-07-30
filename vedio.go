@@ -95,16 +95,19 @@ func NewRegistrationContext[I any, T any](opts ...RegistrationOption) (*Registra
 	out := &RegistrationContext{
 		typ:       iType,
 		lifeCycle: SINGLETON,
-		generator: func() (any, error) {
-			fn, ok := tType.MethodByName("Init")
-			if !ok {
-				return nil, ErrUnsupportedType
-			}
-			return instantiate(fn)
-		},
 	}
 	for _, opt := range opts {
 		opt(out)
+	}
+
+	if out.generator == nil {
+		fn, ok := tType.MethodByName("Init")
+		if !ok {
+			return nil, ErrUnsupportedType
+		}
+		out.generator = func() (any, error) {
+			return instantiate(fn)
+		}
 	}
 
 	return out, nil
