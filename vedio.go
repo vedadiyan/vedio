@@ -33,6 +33,7 @@ const (
 	SCOPED
 
 	ErrTypeNotFound    VedioError = "type could not found"
+	ErrNilType         VedioError = "nil type detected"
 	ErrTypeMismatch    VedioError = "type mismatch"
 	ErrUnsupportedType VedioError = "type does not implement `Init` method"
 	ErrClosedScope     VedioError = "attempt to resolve type on a closed scope"
@@ -52,6 +53,9 @@ func (err VedioError) Error() string {
 }
 
 func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type) error {
+	if interfaceType == nil || implementationType == nil {
+		return ErrNilType
+	}
 	if implementationType.Kind() == reflect.Interface {
 		return ErrTypeMismatch
 	}

@@ -36,19 +36,21 @@ func (x valueReceiver) Test() string {
 
 func Test_assertTypeMatch(t *testing.T) {
 	tests := []testCase{
-		{"correct implementation - not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[ptrReceiver](), false},
-		{"correct implementation - pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*ptrReceiver](), false},
-		{"correct implementation - struct to struct not pointer", reflect.TypeFor[ptrReceiver](), reflect.TypeFor[ptrReceiver](), false},
-		{"correct implementation - struct to struct pointer", reflect.TypeFor[*ptrReceiver](), reflect.TypeFor[*ptrReceiver](), false},
-		{"correct implementation - value receiver not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[valueReceiver](), false},
-		{"correct implementation - value receiver pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*valueReceiver](), false},
-		{"wrong implementation - not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[wrongImplementation](), true},
-		{"wrong implementation - pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*wrongImplementation](), true},
+		{"correct usage - not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[ptrReceiver](), false},
+		{"correct usage - pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*ptrReceiver](), false},
+		{"correct usage - struct to struct not pointer", reflect.TypeFor[ptrReceiver](), reflect.TypeFor[ptrReceiver](), false},
+		{"correct usage - struct to struct pointer", reflect.TypeFor[*ptrReceiver](), reflect.TypeFor[*ptrReceiver](), false},
+		{"correct usage - value receiver not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[valueReceiver](), false},
+		{"correct impusagelementation - value receiver pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*valueReceiver](), false},
+		{"correct usage - none struct type", reflect.TypeFor[string](), reflect.TypeFor[string](), false},
+		{"wrong usage - not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[wrongImplementation](), true},
+		{"wrong usage - pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*wrongImplementation](), true},
 		{"wrong usage - interface to interface", reflect.TypeFor[iinterface](), reflect.TypeFor[iinterface](), true},
 		{"wrong usage - pointer to interface", reflect.TypeFor[*iinterface](), reflect.TypeFor[iinterface](), true},
 		{"wrong usage - interface to pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*iinterface](), true},
 		{"wrong usage - struct to pointer", reflect.TypeFor[ptrReceiver](), reflect.TypeFor[*ptrReceiver](), true},
 		{"wrong usage - pointer to struct", reflect.TypeFor[*ptrReceiver](), reflect.TypeFor[ptrReceiver](), true},
+		{"wrong usage - nil", nil, nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
