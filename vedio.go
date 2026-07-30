@@ -238,7 +238,15 @@ func instantiate(method reflect.Method) (any, error) {
 
 	inN := typ.NumIn()
 	args := make([]reflect.Value, inN)
-	val := reflect.New(typ.In(0)).Elem()
+	arg0 := typ.In(0)
+	isPtr := arg0.Kind() == reflect.Pointer
+	if isPtr {
+		arg0 = arg0.Elem()
+	}
+	val := reflect.New(arg0)
+	if !isPtr {
+		val = val.Elem()
+	}
 	args[0] = val
 	for i := 1; i < inN; i++ {
 		val, err := resolve(typ.In(i))
