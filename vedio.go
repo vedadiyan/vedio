@@ -41,13 +41,28 @@ func init() {
 	container = make(map[reflect.Type]Resolver)
 }
 
-func NewRegistrationContext[T any](opts ...RegistrationOption) *RegistrationContext {
-	typ := reflect.TypeFor[T]()
+func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type) error {
+	if interfaceType.Kind() == reflect.Interface && !implementationType.Implements(interfaceType) {
+		return ErrTypeMismatch
+	}
+	if interfaceType.Kind() != reflect.Interface && interfaceType != implementationType {
+		return ErrTypeMismatch
+	}
+	return nil
+}
+
+func NewRegistrationContext[I any, T any](opts ...RegistrationOption) (*RegistrationContext, error) {
+	iType := reflect.TypeFor[I]()
+	tType := reflect.TypeFor[T]()
+	if err := assertTypeMatch(iType, tType); err != nil {
+		return nil, err
+	}
+
 	out := &RegistrationContext{
-		typ:       typ,
+		typ:       iType,
 		lifeCycle: SINGLETON,
 		generator: func() (any, error) {
-			fn, ok := typ.MethodByName("Init")
+			fn, ok := tType.MethodByName("Init")
 			if !ok {
 				return nil, ErrUnsupportedType
 			}
@@ -58,7 +73,7 @@ func NewRegistrationContext[T any](opts ...RegistrationOption) *RegistrationCont
 		opt(out)
 	}
 
-	return out
+	return out, nil
 }
 
 func (r *RegistrationContext) createSingleton() Resolver {
