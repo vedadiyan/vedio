@@ -6,14 +6,6 @@ import (
 )
 
 type (
-	testCase struct {
-		name string // description of this test case
-		// Named input parameters for target function.
-		interfaceType      reflect.Type
-		implementationType reflect.Type
-		wantErr            bool
-	}
-
 	iinterface interface {
 		Test() string
 	}
@@ -35,6 +27,12 @@ func (x valueReceiver) Test() string {
 }
 
 func Test_assertTypeMatch(t *testing.T) {
+	type testCase struct {
+		name               string
+		interfaceType      reflect.Type
+		implementationType reflect.Type
+		wantErr            bool
+	}
 	tests := []testCase{
 		{"correct usage - not pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[ptrReceiver](), false},
 		{"correct usage - pointer", reflect.TypeFor[iinterface](), reflect.TypeFor[*ptrReceiver](), false},
