@@ -171,10 +171,12 @@ func (r *registrationContext) createScoped() resolver {
 				defer instanceManagerMut.Unlock()
 				delete(instanceManager, rc.Scope.ID())
 			})
-			val, err := r.generator()
-			instanceManager[rc.Scope.ID()] = func() (any, error) {
-				return val, err
+			gen, err := r.generator()
+			val = func() (any, error) {
+				return gen, err
 			}
+			instanceManager[rc.Scope.ID()] = val
+
 		}
 		return val()
 	}

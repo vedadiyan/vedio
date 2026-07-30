@@ -131,3 +131,136 @@ func TestSingletonNonPtrAsPtr(t *testing.T) {
 		return
 	}
 }
+
+func TestTransientPtr(t *testing.T) {
+	if err := vedio.RegisterFor[iinterface, ptrReceiver](vedio.LifeCycleOpt(vedio.TRANSIENT)); err != nil {
+		t.Error(err)
+		return
+	}
+	v1, err := vedio.Resolve[iinterface]()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	v2, err := vedio.Resolve[iinterface]()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v1.Test() == v2.Test() {
+		t.Error("expectation failed")
+		return
+	}
+}
+
+func TestTransienDoublePtr(t *testing.T) {
+	if err := vedio.RegisterFor[iinterface, *ptrReceiver](vedio.LifeCycleOpt(vedio.TRANSIENT)); err != nil {
+		t.Error(err)
+		return
+	}
+	v1, err := vedio.Resolve[iinterface]()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	v2, err := vedio.Resolve[iinterface]()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v1.Test() == v2.Test() {
+		t.Error("expectation failed")
+		return
+	}
+}
+
+func TestScopedSamePtr(t *testing.T) {
+	if err := vedio.RegisterFor[iinterface, ptrReceiver](vedio.LifeCycleOpt(vedio.SCOPED)); err != nil {
+		t.Error(err)
+		return
+	}
+	scope := vedio.NewScope()
+	defer scope.Close()
+	v1, err := vedio.Resolve[iinterface](vedio.ScopeOpt(scope))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	v2, err := vedio.Resolve[iinterface](vedio.ScopeOpt(scope))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v1.Test() != v2.Test() {
+		t.Error("expectation failed")
+		return
+	}
+}
+
+func TestScopedSameDoublePtr(t *testing.T) {
+	if err := vedio.RegisterFor[iinterface, *ptrReceiver](vedio.LifeCycleOpt(vedio.SCOPED)); err != nil {
+		t.Error(err)
+		return
+	}
+	scope := vedio.NewScope()
+	defer scope.Close()
+	v1, err := vedio.Resolve[iinterface](vedio.ScopeOpt(scope))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	v2, err := vedio.Resolve[iinterface](vedio.ScopeOpt(scope))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v1.Test() != v2.Test() {
+		t.Error("expectation failed")
+		return
+	}
+}
+
+func TestScopedDifferentPtr(t *testing.T) {
+	if err := vedio.RegisterFor[iinterface, ptrReceiver](vedio.LifeCycleOpt(vedio.SCOPED)); err != nil {
+		t.Error(err)
+		return
+	}
+	scope1 := vedio.NewScope()
+	defer scope1.Close()
+	v1, err := vedio.Resolve[iinterface](vedio.ScopeOpt(scope1))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	scope2 := vedio.NewScope()
+	defer scope2.Close()
+	v2, err := vedio.Resolve[iinterface](vedio.ScopeOpt(scope2))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if v1.Test() == v2.Test() {
+		t.Error("expectation failed")
+		return
+	}
+}
+
+func TestScopedClosedPtr(t *testing.T) {
+	if err := vedio.RegisterFor[iinterface, ptrReceiver](vedio.LifeCycleOpt(vedio.SCOPED)); err != nil {
+		t.Error(err)
+		return
+	}
+	scope1 := vedio.NewScope()
+	scope1.Close()
+	_, err := vedio.Resolve[iinterface](vedio.ScopeOpt(scope1))
+	if err == nil {
+		t.Error("expectation failed")
+		return
+	}
+
+}
