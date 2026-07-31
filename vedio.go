@@ -200,7 +200,6 @@ func (r *registrationContext) createScoped() resolver {
 				return gen, err
 			}
 			instanceManager[rc.scope.ID()] = val
-
 		}
 		return val()
 	}
