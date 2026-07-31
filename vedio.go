@@ -352,12 +352,16 @@ func Register[T any](opts ...RegistrationOption) error {
 }
 
 func Resolve[T any](opts ...ResolutionOption) (T, error) {
+	return ResolveNamed[T](Default, opts...)
+}
+
+func ResolveNamed[T any](name string, opts ...ResolutionOption) (T, error) {
 	rc := &resolutionContext{}
 	for _, opt := range opts {
 		opt(rc)
 	}
 	typ := reflect.TypeFor[T]()
-	val, err := resolveDefault(typ, rc)
+	val, err := resolve(typ, name, rc)
 	if err != nil {
 		return Zero[T](), err
 	}
