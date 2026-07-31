@@ -43,6 +43,10 @@ func (x valueReceiver) Test() string {
 	return "ok"
 }
 
+func init() {
+	vedio.AllowDuplicateRegistration = true
+}
+
 func TestSingletonPtr(t *testing.T) {
 	if err := vedio.RegisterFor[iinterface, ptrReceiver](); err != nil {
 		t.Error(err)

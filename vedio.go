@@ -60,6 +60,8 @@ const (
 )
 
 var (
+	AllowDuplicateRegistration = false
+
 	container map[reflect.Type]map[string]resolver
 	mut       sync.RWMutex
 
@@ -391,8 +393,10 @@ func set(typ reflect.Type, name string, rslvr resolver) error {
 		val = make(map[string]resolver)
 		container[typ] = val
 	}
-	if _, ok := val[name]; ok {
-		return ErrDuplicateType
+	if !AllowDuplicateRegistration {
+		if _, ok := val[name]; ok {
+			return ErrDuplicateType
+		}
 	}
 	val[name] = rslvr
 	return nil
