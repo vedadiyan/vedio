@@ -18,7 +18,6 @@ type (
 	}
 	resolutionContext struct {
 		scope Scoped
-		name  string
 	}
 	LifeCycle          int
 	RegistrationOption func(*registrationContext)
@@ -80,7 +79,7 @@ func WithGenerator[T any](generator func() (T, error)) RegistrationOption {
 	}
 }
 
-func WithRegistrationName(name string) RegistrationOption {
+func WithName(name string) RegistrationOption {
 	return func(rc *registrationContext) {
 		rc.name = name
 	}
@@ -89,12 +88,6 @@ func WithRegistrationName(name string) RegistrationOption {
 func WithScope(scope Scoped) ResolutionOption {
 	return func(rc *resolutionContext) {
 		rc.scope = scope
-	}
-}
-
-func WithResolutionName(name string) ResolutionOption {
-	return func(rc *resolutionContext) {
-		rc.name = name
 	}
 }
 
@@ -268,18 +261,9 @@ func instantiate(method reflect.Method, rc *resolutionContext) (any, error) {
 	args[0] = val
 	for i := 1; i < inN; i++ {
 		in := typ.In(i)
-		copy := *rc
-		copy.name = Default
-		val, err := resolve(in, &copy)
+		val, err := resolveDefault(in, rc)
 		if err != nil {
-			if err != ErrTypeNotFound {
-				return nil, err
-			}
-			copy.name = in.Name()
-			val, err = resolve(in, &copy)
-			if err != nil {
-				return nil, err
-			}
+			return nil, err
 		}
 		args[i] = reflect.ValueOf(val)
 	}
@@ -294,10 +278,8 @@ func instantiate(method reflect.Method, rc *resolutionContext) (any, error) {
 	return val.Interface(), nil
 }
 
-func resolve(typ reflect.Type, rc *resolutionContext) (any, error) {
-	rc = orDefault(rc, resolutionContext{name: Default})
-
-	fn, ok := get(typ, rc.name)
+func resolve(typ reflect.Type, name string, rc *resolutionContext) (any, error) {
+	fn, ok := get(typ, name)
 	if !ok {
 		return nil, ErrTypeNotFound
 	}
@@ -306,6 +288,10 @@ func resolve(typ reflect.Type, rc *resolutionContext) (any, error) {
 		return nil, err
 	}
 	return val, nil
+}
+
+func resolveDefault(typ reflect.Type, rc *resolutionContext) (any, error) {
+	return resolve(typ, Default, rc)
 }
 
 func RegisterFor[T any, R any](opts ...RegistrationOption) error {
@@ -322,14 +308,12 @@ func Register[T any](opts ...RegistrationOption) error {
 }
 
 func Resolve[T any](opts ...ResolutionOption) (T, error) {
-	rc := &resolutionContext{
-		name: Default,
-	}
+	rc := &resolutionContext{}
 	for _, opt := range opts {
 		opt(rc)
 	}
 	typ := reflect.TypeFor[T]()
-	val, err := resolve(typ, rc)
+	val, err := resolveDefault(typ, rc)
 	if err != nil {
 		return Zero[T](), err
 	}
@@ -360,13 +344,6 @@ func set(typ reflect.Type, name string, rslvr resolver) {
 		container[typ] = val
 	}
 	val[name] = rslvr
-}
-
-func orDefault[T any](actualValue *T, defaultValue T) *T {
-	if actualValue == nil {
-		return &defaultValue
-	}
-	return actualValue
 }
 
 func Zero[T any]() T {

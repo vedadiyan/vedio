@@ -155,7 +155,7 @@ func Test_instantiate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := instantiate(tt.method, &resolutionContext{name: Default})
+			got, gotErr := instantiate(tt.method, &resolutionContext{})
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("instantiate() failed: %v", gotErr)
@@ -216,13 +216,11 @@ func Test_resolve(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rc := &resolutionContext{
-				name: Default,
-			}
+			rc := &resolutionContext{}
 			for _, opt := range tt.opts {
 				opt(rc)
 			}
-			got, gotErr := resolve(tt.typ, rc)
+			got, gotErr := resolveDefault(tt.typ, rc)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("resolve() failed: %v", gotErr)
