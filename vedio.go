@@ -318,12 +318,14 @@ func resolveDefault(typ reflect.Type, rc *resolutionContext) (any, error) {
 }
 
 func resolveNamedParam(typp reflect.Type, rc *resolutionContext) (*reflect.Value, error) {
-	typField, ok := typp.FieldByName("Value")
+	const valueFieldName = "Value"
+	const aliasFieldName = "alias"
+	typField, ok := typp.FieldByName(valueFieldName)
 	if !ok {
 		return nil, ErrExpectationFailed
 	}
 	typ := typField.Type
-	aliasField, ok := typp.FieldByName("alias")
+	aliasField, ok := typp.FieldByName(aliasFieldName)
 	if !ok {
 		return nil, ErrExpectationFailed
 	}
@@ -332,7 +334,7 @@ func resolveNamedParam(typp reflect.Type, rc *resolutionContext) (*reflect.Value
 		return nil, err
 	}
 	out := reflect.New(typp)
-	out.Elem().FieldByName("Value").Set(reflect.ValueOf(val))
+	out.Elem().FieldByName(valueFieldName).Set(reflect.ValueOf(val))
 	elem := out.Elem()
 	return &elem, nil
 }
