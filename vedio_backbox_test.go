@@ -261,5 +261,4 @@ func TestScopedClosedPtr(t *testing.T) {
 		t.Error("expectation failed")
 		return
 	}
-
 }

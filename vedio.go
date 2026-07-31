@@ -10,6 +10,8 @@ import (
 )
 
 type (
+	__ any
+
 	resolver            func(*resolutionContext) (any, error)
 	registrationContext struct {
 		typ       reflect.Type
@@ -46,7 +48,7 @@ const (
 	TRANSIENT
 	SCOPED
 
-	ErrTypeNotFound      VedioError = "type could not found"
+	ErrTypeNotFound      VedioError = "type could not be found"
 	ErrNilType           VedioError = "nil type detected"
 	ErrExpectationFailed VedioError = "expectation failed"
 	ErrInvalidOperation  VedioError = "invalid operation"
@@ -61,7 +63,7 @@ var (
 	container map[reflect.Type]map[string]resolver
 	mut       sync.RWMutex
 
-	namedType = reflect.TypeFor[Named[bool, string]]()
+	pkgPath = reflect.TypeFor[__]().PkgPath()
 )
 
 func init() {
@@ -274,25 +276,13 @@ func instantiate(method reflect.Method, rc *resolutionContext) (any, error) {
 	args[0] = val
 	for i := 1; i < inN; i++ {
 		in := typ.In(i)
-		if in.PkgPath() == namedType.PkgPath() && strings.HasPrefix(in.Name(), "Named[") {
-			typField, ok := in.FieldByName("Value")
-			if !ok {
-				return nil, ErrExpectationFailed
-			}
-			typ := typField.Type
-			aliasField, ok := in.FieldByName("alias")
-			if !ok {
-				return nil, ErrExpectationFailed
-			}
-			val, err := resolve(typ, aliasField.Type.Name(), rc)
+		if isNamedParam(in) {
+			val, err := resolveNamedParam(in, rc)
 			if err != nil {
 				return nil, err
 			}
-			out := reflect.New(in)
-			out.Elem().FieldByName("Value").Set(reflect.ValueOf(val))
-			args[i] = out.Elem()
+			args[i] = *val
 			continue
-
 		}
 		val, err := resolveDefault(in, rc)
 		if err != nil {
@@ -325,6 +315,26 @@ func resolve(typ reflect.Type, name string, rc *resolutionContext) (any, error) 
 
 func resolveDefault(typ reflect.Type, rc *resolutionContext) (any, error) {
 	return resolve(typ, Default, rc)
+}
+
+func resolveNamedParam(typp reflect.Type, rc *resolutionContext) (*reflect.Value, error) {
+	typField, ok := typp.FieldByName("Value")
+	if !ok {
+		return nil, ErrExpectationFailed
+	}
+	typ := typField.Type
+	aliasField, ok := typp.FieldByName("alias")
+	if !ok {
+		return nil, ErrExpectationFailed
+	}
+	val, err := resolve(typ, aliasField.Type.Name(), rc)
+	if err != nil {
+		return nil, err
+	}
+	out := reflect.New(typp)
+	out.Elem().FieldByName("Value").Set(reflect.ValueOf(val))
+	elem := out.Elem()
+	return &elem, nil
 }
 
 func RegisterFor[T any, R any](opts ...RegistrationOption) error {
@@ -377,6 +387,10 @@ func set(typ reflect.Type, name string, rslvr resolver) {
 		container[typ] = val
 	}
 	val[name] = rslvr
+}
+
+func isNamedParam(typ reflect.Type) bool {
+	return typ.PkgPath() == pkgPath && strings.HasPrefix(typ.Name(), "Named[")
 }
 
 func Zero[T any]() T {
