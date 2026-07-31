@@ -12,11 +12,13 @@ type (
 	resolver            func(*resolutionContext) (any, error)
 	registrationContext struct {
 		typ       reflect.Type
+		name      string
 		lifeCycle LifeCycle
-		generator func() (any, error)
+		generator func(*resolutionContext) (any, error)
 	}
 	resolutionContext struct {
-		Scope Scoped
+		scope Scoped
+		name  string
 	}
 	LifeCycle          int
 	RegistrationOption func(*registrationContext)
@@ -47,38 +49,52 @@ const (
 	ErrTypeMismatch      VedioError = "type mismatch"
 	ErrUnsupportedType   VedioError = "type does not implement `Init` method"
 	ErrClosedScope       VedioError = "attempt to resolve type on a closed scope"
+
+	Default string = "default"
 )
 
 var (
-	container map[reflect.Type]resolver
-	mut       sync.Mutex
+	container map[reflect.Type]map[string]resolver
+	mut       sync.RWMutex
 )
 
 func init() {
-	container = make(map[reflect.Type]resolver)
+	container = make(map[reflect.Type]map[string]resolver)
 }
 
 func (err VedioError) Error() string {
 	return string(err)
 }
 
-func LifeCycleOpt(lifeCycle LifeCycle) RegistrationOption {
+func WithLifeCycle(lifeCycle LifeCycle) RegistrationOption {
 	return func(rc *registrationContext) {
 		rc.lifeCycle = lifeCycle
 	}
 }
 
-func GeneratorOpt[T any](generator func() (T, error)) RegistrationOption {
+func WithGenerator[T any](generator func() (T, error)) RegistrationOption {
 	return func(rc *registrationContext) {
-		rc.generator = func() (any, error) {
+		rc.generator = func(_ *resolutionContext) (any, error) {
 			return generator()
 		}
 	}
 }
 
-func ScopeOpt(scope Scoped) ResolutionOption {
+func WithRegistrationName(name string) RegistrationOption {
+	return func(rc *registrationContext) {
+		rc.name = name
+	}
+}
+
+func WithScope(scope Scoped) ResolutionOption {
 	return func(rc *resolutionContext) {
-		rc.Scope = scope
+		rc.scope = scope
+	}
+}
+
+func WithResolutionName(name string) ResolutionOption {
+	return func(rc *resolutionContext) {
+		rc.name = name
 	}
 }
 
@@ -110,6 +126,7 @@ func newRegistrationContext[I any, T any](opts ...RegistrationOption) (*registra
 	out := &registrationContext{
 		typ:       iType,
 		lifeCycle: SINGLETON,
+		name:      Default,
 	}
 
 	for _, opt := range opts {
@@ -124,8 +141,8 @@ func newRegistrationContext[I any, T any](opts ...RegistrationOption) (*registra
 				return nil, ErrUnsupportedType
 			}
 		}
-		out.generator = func() (any, error) {
-			return instantiate(fn)
+		out.generator = func(rc *resolutionContext) (any, error) {
+			return instantiate(fn, rc)
 		}
 	}
 
@@ -138,17 +155,17 @@ func (r *registrationContext) createSingleton() resolver {
 		val  any
 		err  error
 	)
-	return func(_ *resolutionContext) (any, error) {
+	return func(rc *resolutionContext) (any, error) {
 		once.Do(func() {
-			val, err = r.generator()
+			val, err = r.generator(rc)
 		})
 		return val, err
 	}
 }
 
 func (r *registrationContext) createTransient() resolver {
-	return func(_ *resolutionContext) (any, error) {
-		return r.generator()
+	return func(rc *resolutionContext) (any, error) {
+		return r.generator(rc)
 	}
 }
 
@@ -156,26 +173,26 @@ func (r *registrationContext) createScoped() resolver {
 	instanceManager := make(map[string]func() (any, error))
 	var instanceManagerMut sync.Mutex
 	return func(rc *resolutionContext) (any, error) {
-		if rc == nil || rc.Scope == nil {
+		if rc == nil || rc.scope == nil {
 			return nil, ErrInvalidOperation
 		}
-		if rc.Scope.Closed() {
+		if rc.scope.Closed() {
 			return nil, ErrClosedScope
 		}
 		instanceManagerMut.Lock()
 		defer instanceManagerMut.Unlock()
-		val, ok := instanceManager[rc.Scope.ID()]
+		val, ok := instanceManager[rc.scope.ID()]
 		if !ok {
-			defer rc.Scope.OnClose(func() {
+			defer rc.scope.OnClose(func() {
 				instanceManagerMut.Lock()
 				defer instanceManagerMut.Unlock()
-				delete(instanceManager, rc.Scope.ID())
+				delete(instanceManager, rc.scope.ID())
 			})
-			gen, err := r.generator()
+			gen, err := r.generator(rc)
 			val = func() (any, error) {
 				return gen, err
 			}
-			instanceManager[rc.Scope.ID()] = val
+			instanceManager[rc.scope.ID()] = val
 
 		}
 		return val()
@@ -183,20 +200,18 @@ func (r *registrationContext) createScoped() resolver {
 }
 
 func (r *registrationContext) register() {
-	mut.Lock()
-	defer mut.Unlock()
 	switch r.lifeCycle {
 	case SINGLETON:
 		{
-			container[r.typ] = r.createSingleton()
+			set(r.typ, r.name, r.createSingleton())
 		}
 	case TRANSIENT:
 		{
-			container[r.typ] = r.createTransient()
+			set(r.typ, r.name, r.createTransient())
 		}
 	case SCOPED:
 		{
-			container[r.typ] = r.createScoped()
+			set(r.typ, r.name, r.createScoped())
 		}
 	}
 }
@@ -229,7 +244,7 @@ func (scope *Scope) Closed() bool {
 	return scope.closed.Load()
 }
 
-func instantiate(method reflect.Method) (any, error) {
+func instantiate(method reflect.Method, rc *resolutionContext) (any, error) {
 	typ := method.Type
 	errN := -1
 	if typ.NumOut() > 0 {
@@ -252,9 +267,19 @@ func instantiate(method reflect.Method) (any, error) {
 	}
 	args[0] = val
 	for i := 1; i < inN; i++ {
-		val, err := resolve(typ.In(i))
+		in := typ.In(i)
+		copy := *rc
+		copy.name = Default
+		val, err := resolve(in, &copy)
 		if err != nil {
-			return nil, err
+			if err != ErrTypeNotFound {
+				return nil, err
+			}
+			copy.name = in.Name()
+			val, err = resolve(in, &copy)
+			if err != nil {
+				return nil, err
+			}
 		}
 		args[i] = reflect.ValueOf(val)
 	}
@@ -269,16 +294,14 @@ func instantiate(method reflect.Method) (any, error) {
 	return val.Interface(), nil
 }
 
-func resolve(typ reflect.Type, opts ...ResolutionOption) (any, error) {
-	rOpts := &resolutionContext{}
-	for _, opt := range opts {
-		opt(rOpts)
-	}
-	fn, ok := container[typ]
+func resolve(typ reflect.Type, rc *resolutionContext) (any, error) {
+	rc = orDefault(rc, resolutionContext{name: Default})
+
+	fn, ok := get(typ, rc.name)
 	if !ok {
 		return nil, ErrTypeNotFound
 	}
-	val, err := fn(rOpts)
+	val, err := fn(rc)
 	if err != nil {
 		return nil, err
 	}
@@ -299,8 +322,14 @@ func Register[T any](opts ...RegistrationOption) error {
 }
 
 func Resolve[T any](opts ...ResolutionOption) (T, error) {
+	rc := &resolutionContext{
+		name: Default,
+	}
+	for _, opt := range opts {
+		opt(rc)
+	}
 	typ := reflect.TypeFor[T]()
-	val, err := resolve(typ, opts...)
+	val, err := resolve(typ, rc)
 	if err != nil {
 		return Zero[T](), err
 	}
@@ -308,6 +337,36 @@ func Resolve[T any](opts ...ResolutionOption) (T, error) {
 		return out, nil
 	}
 	return Zero[T](), ErrTypeMismatch
+}
+
+func get(typ reflect.Type, name string) (resolver, bool) {
+	mut.RLock()
+	defer mut.RUnlock()
+	base, ok := container[typ]
+	if !ok {
+		return nil, false
+	}
+
+	out, ok := base[name]
+	return out, ok
+}
+
+func set(typ reflect.Type, name string, rslvr resolver) {
+	mut.Lock()
+	defer mut.Unlock()
+	val, ok := container[typ]
+	if !ok {
+		val = make(map[string]resolver)
+		container[typ] = val
+	}
+	val[name] = rslvr
+}
+
+func orDefault[T any](actualValue *T, defaultValue T) *T {
+	if actualValue == nil {
+		return &defaultValue
+	}
+	return actualValue
 }
 
 func Zero[T any]() T {

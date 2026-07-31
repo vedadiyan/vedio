@@ -93,19 +93,19 @@ func TestNewRegistrationContext(t *testing.T) {
 			return newRegistrationContext[iinterface, ptrReceiver]()
 		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
 		{"correct usage - lifecyle option not pointer", func() (*registrationContext, error) {
-			return newRegistrationContext[iinterface, ptrReceiver](LifeCycleOpt(TRANSIENT))
+			return newRegistrationContext[iinterface, ptrReceiver](WithLifeCycle(TRANSIENT))
 		}, func(rc *registrationContext) bool { return rc.lifeCycle == TRANSIENT && rc.generator != nil }, false},
 		{"correct usage - generator option not pointer", func() (*registrationContext, error) {
-			return newRegistrationContext[iinterface, ptrReceiver](GeneratorOpt(generatorNonPointer))
+			return newRegistrationContext[iinterface, ptrReceiver](WithGenerator(generatorNonPointer))
 		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
 		{"correct usage - no options pointer", func() (*registrationContext, error) {
 			return newRegistrationContext[iinterface, *ptrReceiver]()
 		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
 		{"correct usage - lifecyle option pointer", func() (*registrationContext, error) {
-			return newRegistrationContext[iinterface, *ptrReceiver](LifeCycleOpt(TRANSIENT))
+			return newRegistrationContext[iinterface, *ptrReceiver](WithLifeCycle(TRANSIENT))
 		}, func(rc *registrationContext) bool { return rc.lifeCycle == TRANSIENT && rc.generator != nil }, false},
 		{"correct usage -  generator option pointer", func() (*registrationContext, error) {
-			return newRegistrationContext[iinterface, *ptrReceiver](GeneratorOpt(generatorPointer))
+			return newRegistrationContext[iinterface, *ptrReceiver](WithGenerator(generatorPointer))
 		}, func(rc *registrationContext) bool { return rc.lifeCycle == SINGLETON && rc.generator != nil }, false},
 
 		{"wrong usage -  no init method", func() (*registrationContext, error) {
@@ -144,9 +144,9 @@ func Test_instantiate(t *testing.T) {
 	simpleMethpd, _ := reflect.TypeFor[*ptrReceiver]().MethodByName("Init")
 	complexMethpd, _ := reflect.TypeFor[*ptrReceiverComplex]().MethodByName("Init")
 	key := reflect.TypeFor[string]()
-	container[key] = func(rc *resolutionContext) (any, error) {
+	container[key] = map[string]resolver{Default: func(rc *resolutionContext) (any, error) {
 		return "ok", nil
-	}
+	}}
 	defer delete(container, key)
 
 	tests := []testCase{
@@ -155,7 +155,7 @@ func Test_instantiate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := instantiate(tt.method)
+			got, gotErr := instantiate(tt.method, &resolutionContext{name: Default})
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("instantiate() failed: %v", gotErr)
@@ -192,30 +192,37 @@ func Test_resolve(t *testing.T) {
 	incorrectKey := reflect.TypeFor[IncorrectKey]()
 	errorKey := reflect.TypeFor[ErrorKey]()
 	scopedKey := reflect.TypeFor[ScopedKey]()
-	container[correctKey] = func(rc *resolutionContext) (any, error) {
+
+	container[correctKey] = map[string]resolver{Default: func(rc *resolutionContext) (any, error) {
 		return true, nil
-	}
-	container[errorKey] = func(rc *resolutionContext) (any, error) {
+	}}
+	container[errorKey] = map[string]resolver{Default: func(rc *resolutionContext) (any, error) {
 		return nil, fmt.Errorf("expected error")
-	}
-	container[scopedKey] = func(rc *resolutionContext) (any, error) {
-		if rc == nil || rc.Scope == nil || rc.Scope.ID() == "" {
+	}}
+	container[scopedKey] = map[string]resolver{Default: func(rc *resolutionContext) (any, error) {
+		if rc == nil || rc.scope == nil || rc.scope.ID() == "" {
 			return nil, fmt.Errorf("scoped is null")
 		}
 		return true, nil
-	}
+	}}
 	defer delete(container, correctKey)
 	defer delete(container, errorKey)
 
 	tests := []testCase{
 		{"correct usage - simple", correctKey, nil, true, false},
-		{"correct usage - scoped", scopedKey, []ResolutionOption{ScopeOpt(NewScope())}, true, false},
+		{"correct usage - scoped", scopedKey, []ResolutionOption{WithScope(NewScope())}, true, false},
 		{"correct usage - expected error", errorKey, nil, nil, true},
 		{"wrong usage - unresolved type", incorrectKey, nil, nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, gotErr := resolve(tt.typ, tt.opts...)
+			rc := &resolutionContext{
+				name: Default,
+			}
+			for _, opt := range tt.opts {
+				opt(rc)
+			}
+			got, gotErr := resolve(tt.typ, rc)
 			if gotErr != nil {
 				if !tt.wantErr {
 					t.Errorf("resolve() failed: %v", gotErr)
