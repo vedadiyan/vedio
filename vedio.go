@@ -92,6 +92,12 @@ func WithName(name string) RegistrationOption {
 	}
 }
 
+func WithNameFor[T any]() RegistrationOption {
+	return func(rc *registrationContext) {
+		rc.name = reflect.TypeFor[T]().Name()
+	}
+}
+
 func WithScope(scope Scoped) ResolutionOption {
 	return func(rc *resolutionContext) {
 		rc.scope = scope
