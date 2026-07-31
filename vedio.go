@@ -34,8 +34,8 @@ type (
 		callBacks []func()
 		closed    atomic.Bool
 	}
-	VedioError          string
-	Named[T any, N any] struct {
+	VedioError              string
+	Named[T any, N ~string] struct {
 		Value T
 		alias N
 	}
