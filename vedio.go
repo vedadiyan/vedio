@@ -10,8 +10,7 @@ import (
 )
 
 type (
-	__ any
-
+	pkgReference        any
 	resolver            func(*resolutionContext) (any, error)
 	registrationContext struct {
 		typ       reflect.Type
@@ -63,7 +62,7 @@ var (
 	container map[reflect.Type]map[string]resolver
 	mut       sync.RWMutex
 
-	pkgPath = reflect.TypeFor[__]().PkgPath()
+	pkgPath = reflect.TypeFor[pkgReference]().PkgPath()
 )
 
 func init() {
