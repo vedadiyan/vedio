@@ -24,7 +24,9 @@ func (x *ptrReceiver) Test() string {
 	return "ok"
 }
 
-func (x *ptrReceiverComplex) Init(str string) error {
+type X string
+
+func (x *ptrReceiverComplex) Init(str Named[string, X]) error {
 	return nil
 }
 
@@ -144,7 +146,7 @@ func Test_instantiate(t *testing.T) {
 	simpleMethpd, _ := reflect.TypeFor[*ptrReceiver]().MethodByName("Init")
 	complexMethpd, _ := reflect.TypeFor[*ptrReceiverComplex]().MethodByName("Init")
 	key := reflect.TypeFor[string]()
-	container[key] = map[string]resolver{Default: func(rc *resolutionContext) (any, error) {
+	container[key] = map[string]resolver{"X": func(rc *resolutionContext) (any, error) {
 		return "ok", nil
 	}}
 	defer delete(container, key)

@@ -2,6 +2,7 @@ package vedio
 
 import (
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -33,7 +34,11 @@ type (
 		callBacks []func()
 		closed    atomic.Bool
 	}
-	VedioError string
+	VedioError          string
+	Named[T any, N any] struct {
+		Value T
+		alias N
+	}
 )
 
 const (
@@ -55,6 +60,8 @@ const (
 var (
 	container map[reflect.Type]map[string]resolver
 	mut       sync.RWMutex
+
+	namedType = reflect.TypeFor[Named[bool, string]]()
 )
 
 func init() {
@@ -261,6 +268,26 @@ func instantiate(method reflect.Method, rc *resolutionContext) (any, error) {
 	args[0] = val
 	for i := 1; i < inN; i++ {
 		in := typ.In(i)
+		if in.PkgPath() == namedType.PkgPath() && strings.HasPrefix(in.Name(), "Named[") {
+			typField, ok := in.FieldByName("Value")
+			if !ok {
+				return nil, ErrExpectationFailed
+			}
+			typ := typField.Type
+			aliasField, ok := in.FieldByName("alias")
+			if !ok {
+				return nil, ErrExpectationFailed
+			}
+			val, err := resolve(typ, aliasField.Type.Name(), rc)
+			if err != nil {
+				return nil, err
+			}
+			out := reflect.New(in)
+			out.Elem().FieldByName("Value").Set(reflect.ValueOf(val))
+			args[i] = out.Elem()
+			continue
+
+		}
 		val, err := resolveDefault(in, rc)
 		if err != nil {
 			return nil, err
