@@ -51,6 +51,7 @@ const (
 	ErrNilType           VedioError = "nil type detected"
 	ErrExpectationFailed VedioError = "expectation failed"
 	ErrInvalidOperation  VedioError = "invalid operation"
+	ErrDuplicateType     VedioError = "duplicate type registration"
 	ErrTypeMismatch      VedioError = "type mismatch"
 	ErrUnsupportedType   VedioError = "type does not implement `Init` method"
 	ErrClosedScope       VedioError = "attempt to resolve type on a closed scope"
@@ -205,21 +206,22 @@ func (r *registrationContext) createScoped() resolver {
 	}
 }
 
-func (r *registrationContext) register() {
+func (r *registrationContext) register() error {
 	switch r.lifeCycle {
 	case SINGLETON:
 		{
-			set(r.typ, r.name, r.createSingleton())
+			return set(r.typ, r.name, r.createSingleton())
 		}
 	case TRANSIENT:
 		{
-			set(r.typ, r.name, r.createTransient())
+			return set(r.typ, r.name, r.createTransient())
 		}
 	case SCOPED:
 		{
-			set(r.typ, r.name, r.createScoped())
+			return set(r.typ, r.name, r.createScoped())
 		}
 	}
+	return nil
 }
 
 func NewScope() Scoped {
@@ -342,8 +344,7 @@ func RegisterFor[T any, R any](opts ...RegistrationOption) error {
 	if err != nil {
 		return err
 	}
-	r.register()
-	return nil
+	return r.register()
 }
 
 func Register[T any](opts ...RegistrationOption) error {
@@ -382,7 +383,7 @@ func get(typ reflect.Type, name string) (resolver, bool) {
 	return out, ok
 }
 
-func set(typ reflect.Type, name string, rslvr resolver) {
+func set(typ reflect.Type, name string, rslvr resolver) error {
 	mut.Lock()
 	defer mut.Unlock()
 	val, ok := container[typ]
@@ -390,7 +391,11 @@ func set(typ reflect.Type, name string, rslvr resolver) {
 		val = make(map[string]resolver)
 		container[typ] = val
 	}
+	if _, ok := val[name]; ok {
+		return ErrDuplicateType
+	}
 	val[name] = rslvr
+	return nil
 }
 
 func isNamedParam(typ reflect.Type) bool {
