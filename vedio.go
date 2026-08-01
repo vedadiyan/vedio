@@ -2,6 +2,7 @@ package vedio
 
 import (
 	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -9,14 +10,16 @@ import (
 )
 
 type (
+	pkgReference        any
 	resolver            func(*resolutionContext) (any, error)
 	registrationContext struct {
 		typ       reflect.Type
+		name      string
 		lifeCycle LifeCycle
-		generator func() (any, error)
+		generator func(*resolutionContext) (any, error)
 	}
 	resolutionContext struct {
-		Scope Scoped
+		scope Scoped
 	}
 	LifeCycle          int
 	RegistrationOption func(*registrationContext)
@@ -32,7 +35,11 @@ type (
 		callBacks []func()
 		closed    atomic.Bool
 	}
-	VedioError string
+	VedioError              string
+	Named[T any, N ~string] struct {
+		Value T
+		alias N
+	}
 )
 
 const (
@@ -40,45 +47,65 @@ const (
 	TRANSIENT
 	SCOPED
 
-	ErrTypeNotFound      VedioError = "type could not found"
+	ErrTypeNotFound      VedioError = "type could not be found"
 	ErrNilType           VedioError = "nil type detected"
 	ErrExpectationFailed VedioError = "expectation failed"
 	ErrInvalidOperation  VedioError = "invalid operation"
+	ErrDuplicateType     VedioError = "duplicate type registration"
 	ErrTypeMismatch      VedioError = "type mismatch"
 	ErrUnsupportedType   VedioError = "type does not implement `Init` method"
 	ErrClosedScope       VedioError = "attempt to resolve type on a closed scope"
+
+	Default string = "default"
 )
 
 var (
-	container map[reflect.Type]resolver
-	mut       sync.Mutex
+	AllowDuplicateRegistration = false
+	AllowReadWithNoLock        = false
+
+	container map[reflect.Type]map[string]resolver
+	mut       sync.RWMutex
+
+	pkgPath = reflect.TypeFor[pkgReference]().PkgPath()
 )
 
 func init() {
-	container = make(map[reflect.Type]resolver)
+	container = make(map[reflect.Type]map[string]resolver)
 }
 
 func (err VedioError) Error() string {
 	return string(err)
 }
 
-func LifeCycleOpt(lifeCycle LifeCycle) RegistrationOption {
+func WithLifeCycle(lifeCycle LifeCycle) RegistrationOption {
 	return func(rc *registrationContext) {
 		rc.lifeCycle = lifeCycle
 	}
 }
 
-func GeneratorOpt[T any](generator func() (T, error)) RegistrationOption {
+func WithGenerator[T any](generator func() (T, error)) RegistrationOption {
 	return func(rc *registrationContext) {
-		rc.generator = func() (any, error) {
+		rc.generator = func(_ *resolutionContext) (any, error) {
 			return generator()
 		}
 	}
 }
 
-func ScopeOpt(scope Scoped) ResolutionOption {
+func WithName(name string) RegistrationOption {
+	return func(rc *registrationContext) {
+		rc.name = name
+	}
+}
+
+func WithNameFor[T any]() RegistrationOption {
+	return func(rc *registrationContext) {
+		rc.name = reflect.TypeFor[T]().Name()
+	}
+}
+
+func WithScope(scope Scoped) ResolutionOption {
 	return func(rc *resolutionContext) {
-		rc.Scope = scope
+		rc.scope = scope
 	}
 }
 
@@ -110,6 +137,7 @@ func newRegistrationContext[I any, T any](opts ...RegistrationOption) (*registra
 	out := &registrationContext{
 		typ:       iType,
 		lifeCycle: SINGLETON,
+		name:      Default,
 	}
 
 	for _, opt := range opts {
@@ -124,8 +152,8 @@ func newRegistrationContext[I any, T any](opts ...RegistrationOption) (*registra
 				return nil, ErrUnsupportedType
 			}
 		}
-		out.generator = func() (any, error) {
-			return instantiate(fn)
+		out.generator = func(rc *resolutionContext) (any, error) {
+			return instantiate(fn, rc)
 		}
 	}
 
@@ -138,67 +166,62 @@ func (r *registrationContext) createSingleton() resolver {
 		val  any
 		err  error
 	)
-	return func(_ *resolutionContext) (any, error) {
+	return func(rc *resolutionContext) (any, error) {
 		once.Do(func() {
-			val, err = r.generator()
+			val, err = r.generator(rc)
 		})
 		return val, err
 	}
 }
 
 func (r *registrationContext) createTransient() resolver {
-	return func(_ *resolutionContext) (any, error) {
-		return r.generator()
+	return func(rc *resolutionContext) (any, error) {
+		return r.generator(rc)
 	}
 }
 
 func (r *registrationContext) createScoped() resolver {
-	instanceManager := make(map[string]func() (any, error))
-	var instanceManagerMut sync.Mutex
+	var instanceManager sync.Map
 	return func(rc *resolutionContext) (any, error) {
-		if rc == nil || rc.Scope == nil {
+		if rc == nil || rc.scope == nil {
 			return nil, ErrInvalidOperation
 		}
-		if rc.Scope.Closed() {
+		if rc.scope.Closed() {
 			return nil, ErrClosedScope
 		}
-		instanceManagerMut.Lock()
-		defer instanceManagerMut.Unlock()
-		val, ok := instanceManager[rc.Scope.ID()]
-		if !ok {
-			defer rc.Scope.OnClose(func() {
-				instanceManagerMut.Lock()
-				defer instanceManagerMut.Unlock()
-				delete(instanceManager, rc.Scope.ID())
+		val, _ := instanceManager.LoadOrStore(rc.scope.ID(), sync.OnceValue(func() func() (any, error) {
+			rc.scope.OnClose(func() {
+				instanceManager.Delete(rc.scope.ID())
 			})
-			gen, err := r.generator()
-			val = func() (any, error) {
+			gen, err := r.generator(rc)
+			return func() (any, error) {
 				return gen, err
 			}
-			instanceManager[rc.Scope.ID()] = val
+		}))
 
+		if val, ok := val.(func() func() (any, error)); ok {
+			return val()()
 		}
-		return val()
+		return nil, ErrExpectationFailed
 	}
 }
 
-func (r *registrationContext) register() {
-	mut.Lock()
-	defer mut.Unlock()
+func (r *registrationContext) register() error {
 	switch r.lifeCycle {
 	case SINGLETON:
 		{
-			container[r.typ] = r.createSingleton()
+			return set(r.typ, r.name, r.createSingleton())
 		}
 	case TRANSIENT:
 		{
-			container[r.typ] = r.createTransient()
+			return set(r.typ, r.name, r.createTransient())
 		}
 	case SCOPED:
 		{
-			container[r.typ] = r.createScoped()
+			return set(r.typ, r.name, r.createScoped())
 		}
 	}
+	return nil
 }
 
 func NewScope() Scoped {
@@ -212,6 +235,9 @@ func (scope *Scope) ID() string {
 }
 
 func (scope *Scope) OnClose(fn func()) {
+	if scope.closed.Load() {
+		return
+	}
 	scope.callBacks = append(scope.callBacks, fn)
 }
 
@@ -229,7 +255,7 @@ func (scope *Scope) Closed() bool {
 	return scope.closed.Load()
 }
 
-func instantiate(method reflect.Method) (any, error) {
+func instantiate(method reflect.Method, rc *resolutionContext) (any, error) {
 	typ := method.Type
 	errN := -1
 	if typ.NumOut() > 0 {
@@ -240,6 +266,9 @@ func instantiate(method reflect.Method) (any, error) {
 	}
 
 	inN := typ.NumIn()
+	if inN == 0 {
+		return nil, ErrExpectationFailed
+	}
 	args := make([]reflect.Value, inN)
 	arg0 := typ.In(0)
 	isPtr := arg0.Kind() == reflect.Pointer
@@ -252,7 +281,16 @@ func instantiate(method reflect.Method) (any, error) {
 	}
 	args[0] = val
 	for i := 1; i < inN; i++ {
-		val, err := resolve(typ.In(i))
+		in := typ.In(i)
+		if isNamedParam(in) {
+			val, err := resolveNamedParam(in, rc)
+			if err != nil {
+				return nil, err
+			}
+			args[i] = *val
+			continue
+		}
+		val, err := resolveDefault(in, rc)
 		if err != nil {
 			return nil, err
 		}
@@ -269,20 +307,42 @@ func instantiate(method reflect.Method) (any, error) {
 	return val.Interface(), nil
 }
 
-func resolve(typ reflect.Type, opts ...ResolutionOption) (any, error) {
-	rOpts := &resolutionContext{}
-	for _, opt := range opts {
-		opt(rOpts)
-	}
-	fn, ok := container[typ]
+func resolve(typ reflect.Type, name string, rc *resolutionContext) (any, error) {
+	fn, ok := get(typ, name)
 	if !ok {
 		return nil, ErrTypeNotFound
 	}
-	val, err := fn(rOpts)
+	val, err := fn(rc)
 	if err != nil {
 		return nil, err
 	}
 	return val, nil
+}
+
+func resolveDefault(typ reflect.Type, rc *resolutionContext) (any, error) {
+	return resolve(typ, Default, rc)
+}
+
+func resolveNamedParam(typp reflect.Type, rc *resolutionContext) (*reflect.Value, error) {
+	const valueFieldName = "Value"
+	const aliasFieldName = "alias"
+	typField, ok := typp.FieldByName(valueFieldName)
+	if !ok {
+		return nil, ErrExpectationFailed
+	}
+	typ := typField.Type
+	aliasField, ok := typp.FieldByName(aliasFieldName)
+	if !ok {
+		return nil, ErrExpectationFailed
+	}
+	val, err := resolve(typ, aliasField.Type.Name(), rc)
+	if err != nil {
+		return nil, err
+	}
+	out := reflect.New(typp)
+	out.Elem().FieldByName(valueFieldName).Set(reflect.ValueOf(val))
+	elem := out.Elem()
+	return &elem, nil
 }
 
 func RegisterFor[T any, R any](opts ...RegistrationOption) error {
@@ -290,8 +350,7 @@ func RegisterFor[T any, R any](opts ...RegistrationOption) error {
 	if err != nil {
 		return err
 	}
-	r.register()
-	return nil
+	return r.register()
 }
 
 func Register[T any](opts ...RegistrationOption) error {
@@ -299,8 +358,16 @@ func Register[T any](opts ...RegistrationOption) error {
 }
 
 func Resolve[T any](opts ...ResolutionOption) (T, error) {
+	return ResolveNamed[T](Default, opts...)
+}
+
+func ResolveNamed[T any](name string, opts ...ResolutionOption) (T, error) {
+	rc := &resolutionContext{}
+	for _, opt := range opts {
+		opt(rc)
+	}
 	typ := reflect.TypeFor[T]()
-	val, err := resolve(typ, opts...)
+	val, err := resolve(typ, name, rc)
 	if err != nil {
 		return Zero[T](), err
 	}
@@ -308,6 +375,41 @@ func Resolve[T any](opts ...ResolutionOption) (T, error) {
 		return out, nil
 	}
 	return Zero[T](), ErrTypeMismatch
+}
+
+func get(typ reflect.Type, name string) (resolver, bool) {
+	if !AllowReadWithNoLock {
+		mut.RLock()
+		defer mut.RUnlock()
+	}
+	base, ok := container[typ]
+	if !ok {
+		return nil, false
+	}
+
+	out, ok := base[name]
+	return out, ok
+}
+
+func set(typ reflect.Type, name string, rslvr resolver) error {
+	mut.Lock()
+	defer mut.Unlock()
+	val, ok := container[typ]
+	if !ok {
+		val = make(map[string]resolver)
+		container[typ] = val
+	}
+	if !AllowDuplicateRegistration {
+		if _, ok := val[name]; ok {
+			return ErrDuplicateType
+		}
+	}
+	val[name] = rslvr
+	return nil
+}
+
+func isNamedParam(typ reflect.Type) bool {
+	return typ.PkgPath() == pkgPath && strings.HasPrefix(typ.Name(), "Named[")
 }
 
 func Zero[T any]() T {
