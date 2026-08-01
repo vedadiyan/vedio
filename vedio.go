@@ -61,6 +61,7 @@ const (
 
 var (
 	AllowDuplicateRegistration = false
+	AllowReadWithNoLock        = false
 
 	container map[reflect.Type]map[string]resolver
 	mut       sync.RWMutex
@@ -180,8 +181,7 @@ func (r *registrationContext) createTransient() resolver {
 }
 
 func (r *registrationContext) createScoped() resolver {
-	instanceManager := make(map[string]func() (any, error))
-	var instanceManagerMut sync.Mutex
+	var instanceManager sync.Map
 	return func(rc *resolutionContext) (any, error) {
 		if rc == nil || rc.scope == nil {
 			return nil, ErrInvalidOperation
@@ -189,22 +189,16 @@ func (r *registrationContext) createScoped() resolver {
 		if rc.scope.Closed() {
 			return nil, ErrClosedScope
 		}
-		instanceManagerMut.Lock()
-		defer instanceManagerMut.Unlock()
-		val, ok := instanceManager[rc.scope.ID()]
-		if !ok {
+		val, _ := instanceManager.LoadOrStore(rc.scope.ID(), sync.OnceValue(func() func() (any, error) {
 			defer rc.scope.OnClose(func() {
-				instanceManagerMut.Lock()
-				defer instanceManagerMut.Unlock()
-				delete(instanceManager, rc.scope.ID())
+				instanceManager.Delete(rc.scope.ID())
 			})
 			gen, err := r.generator(rc)
-			val = func() (any, error) {
+			return func() (any, error) {
 				return gen, err
 			}
-			instanceManager[rc.scope.ID()] = val
-		}
-		return val()
+		}))
+		return val.(func() (any, error))()
 	}
 }
 
@@ -374,8 +368,10 @@ func ResolveNamed[T any](name string, opts ...ResolutionOption) (T, error) {
 }
 
 func get(typ reflect.Type, name string) (resolver, bool) {
-	mut.RLock()
-	defer mut.RUnlock()
+	if !AllowReadWithNoLock {
+		mut.RLock()
+		defer mut.RUnlock()
+	}
 	base, ok := container[typ]
 	if !ok {
 		return nil, false
