@@ -198,7 +198,11 @@ func (r *registrationContext) createScoped() resolver {
 				return gen, err
 			}
 		}))
-		return val.(func() func() (any, error))()()
+
+		if val, ok := val.(func() func() (any, error)); ok {
+			return val()()
+		}
+		return nil, ErrExpectationFailed
 	}
 }
 
