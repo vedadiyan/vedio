@@ -266,6 +266,9 @@ func instantiate(method reflect.Method, rc *resolutionContext) (any, error) {
 	}
 
 	inN := typ.NumIn()
+	if inN == 0 {
+		return nil, ErrExpectationFailed
+	}
 	args := make([]reflect.Value, inN)
 	arg0 := typ.In(0)
 	isPtr := arg0.Kind() == reflect.Pointer
