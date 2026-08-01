@@ -11,6 +11,11 @@ type (
 	iinterface interface {
 		Test() string
 	}
+
+	iinterface2 interface {
+		Test() string
+	}
+
 	ptrReceiver struct {
 		id string
 	}
@@ -260,7 +265,7 @@ func TestScopedClosedPtr(t *testing.T) {
 	}
 	scope1 := vedio.NewScope()
 	scope1.Close()
-	_, err := vedio.Resolve[iinterface](vedio.WithScope(scope1))
+	_, err := vedio.Resolve[iinterface2](vedio.WithScope(scope1))
 	if err == nil {
 		t.Error("expectation failed")
 		return

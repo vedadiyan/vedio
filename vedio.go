@@ -114,6 +114,9 @@ func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type
 		return ErrNilType
 	}
 	if implementationType.Kind() == reflect.Interface {
+		if implementationType.AssignableTo(reflect.TypeFor[any]()) {
+			return nil
+		}
 		return ErrExpectationFailed
 	}
 	if interfaceType.Kind() == reflect.Interface && !implementationType.Implements(interfaceType) {
