@@ -191,7 +191,7 @@ func (r *registrationContext) createScoped() resolver {
 			return nil, ErrClosedScope
 		}
 		val, _ := instanceManager.LoadOrStore(rc.scope.ID(), sync.OnceValue(func() func() (any, error) {
-			defer rc.scope.OnClose(func() {
+			rc.scope.OnClose(func() {
 				instanceManager.Delete(rc.scope.ID())
 			})
 			gen, err := r.generator(rc)
