@@ -34,6 +34,7 @@ type (
 		id        string
 		callBacks []func()
 		closed    atomic.Bool
+		mut       sync.Mutex
 	}
 	VedioError              string
 	Named[T any, N ~string] struct {
@@ -231,6 +232,8 @@ func (scope *Scope) ID() string {
 }
 
 func (scope *Scope) OnClose(fn func()) {
+	scope.mut.Lock()
+	defer scope.mut.Unlock()
 	scope.callBacks = append(scope.callBacks, fn)
 }
 
