@@ -231,6 +231,9 @@ func (scope *Scope) ID() string {
 }
 
 func (scope *Scope) OnClose(fn func()) {
+	if scope.closed.Load() {
+		return
+	}
 	scope.callBacks = append(scope.callBacks, fn)
 }
 
