@@ -199,7 +199,7 @@ func (r *registrationContext) createScoped() resolver {
 				return gen, err
 			}
 		}))
-		return val.(func() (any, error))()
+		return val.(func() func() (any, error))()()
 	}
 }
 
