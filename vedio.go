@@ -21,6 +21,7 @@ type (
 	}
 	resolutionContext struct {
 		scope Scoped
+		name  string
 	}
 	LifeCycle          int
 	RegistrationOption func(*registrationContext)
@@ -367,20 +368,13 @@ func RegisterAnnonymous[T any](opts ...RegistrationOption) error {
 }
 
 func Resolve[T any](opts ...ResolutionOption) (T, error) {
-	return ResolveNamed[T](Default, opts...)
-}
-
-func ResolveAnnonymous[T any](opts ...ResolutionOption) (T, error) {
-	return ResolveAnnonymousWithName[T](Default, opts...)
-}
-
-func ResolveNamed[T any](name string, opts ...ResolutionOption) (T, error) {
 	rc := &resolutionContext{}
+	rc.name = Default
 	for _, opt := range opts {
 		opt(rc)
 	}
 	typ := reflect.TypeFor[T]()
-	val, err := resolve(typ, name, rc)
+	val, err := resolve(typ, rc.name, rc)
 	if err != nil {
 		return Zero[T](), err
 	}
@@ -390,12 +384,13 @@ func ResolveNamed[T any](name string, opts ...ResolutionOption) (T, error) {
 	return Zero[T](), ErrTypeMismatch
 }
 
-func ResolveAnnonymousWithName[T any](name string, opts ...ResolutionOption) (T, error) {
+func ResolveAnnonymous[T any](opts ...ResolutionOption) (T, error) {
 	rc := &resolutionContext{}
+	rc.name = Default
 	for _, opt := range opts {
 		opt(rc)
 	}
-	val, err := resolve(annonymousType, name, rc)
+	val, err := resolve(annonymousType, rc.name, rc)
 	if err != nil {
 		return Zero[T](), err
 	}
