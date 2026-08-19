@@ -10,6 +10,7 @@ import (
 )
 
 type (
+	Annonymous          struct{}
 	pkgReference        any
 	resolver            func(*resolutionContext) (any, error)
 	registrationContext struct {
@@ -66,7 +67,8 @@ var (
 	container map[reflect.Type]map[string]resolver
 	mut       sync.RWMutex
 
-	pkgPath = reflect.TypeFor[pkgReference]().PkgPath()
+	pkgPath        = reflect.TypeFor[pkgReference]().PkgPath()
+	annonymousType = reflect.TypeFor[Annonymous]()
 )
 
 func init() {
@@ -110,13 +112,13 @@ func WithScope(scope Scoped) ResolutionOption {
 }
 
 func assertTypeMatch(interfaceType reflect.Type, implementationType reflect.Type) error {
+	if interfaceType == annonymousType {
+		return nil
+	}
 	if interfaceType == nil || implementationType == nil {
 		return ErrNilType
 	}
 	if implementationType.Kind() == reflect.Interface {
-		if implementationType.AssignableTo(reflect.TypeFor[any]()) {
-			return nil
-		}
 		return ErrExpectationFailed
 	}
 	if interfaceType.Kind() == reflect.Interface && !implementationType.Implements(interfaceType) {
@@ -371,6 +373,21 @@ func ResolveNamed[T any](name string, opts ...ResolutionOption) (T, error) {
 	}
 	typ := reflect.TypeFor[T]()
 	val, err := resolve(typ, name, rc)
+	if err != nil {
+		return Zero[T](), err
+	}
+	if out, ok := val.(T); ok {
+		return out, nil
+	}
+	return Zero[T](), ErrTypeMismatch
+}
+
+func ResolveAnnonymous[T any](name string, opts ...ResolutionOption) (T, error) {
+	rc := &resolutionContext{}
+	for _, opt := range opts {
+		opt(rc)
+	}
+	val, err := resolve(annonymousType, name, rc)
 	if err != nil {
 		return Zero[T](), err
 	}
