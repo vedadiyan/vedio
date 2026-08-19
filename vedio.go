@@ -362,8 +362,16 @@ func Register[T any](opts ...RegistrationOption) error {
 	return RegisterFor[T, T](opts...)
 }
 
+func RegisterAnnonymous[T any](opts ...RegistrationOption) error {
+	return RegisterFor[Annonymous, T](opts...)
+}
+
 func Resolve[T any](opts ...ResolutionOption) (T, error) {
 	return ResolveNamed[T](Default, opts...)
+}
+
+func ResolveAnnonymous[T any](opts ...ResolutionOption) (T, error) {
+	return ResolveAnnonymousWithName[T](Default, opts...)
 }
 
 func ResolveNamed[T any](name string, opts ...ResolutionOption) (T, error) {
@@ -382,7 +390,7 @@ func ResolveNamed[T any](name string, opts ...ResolutionOption) (T, error) {
 	return Zero[T](), ErrTypeMismatch
 }
 
-func ResolveAnnonymous[T any](name string, opts ...ResolutionOption) (T, error) {
+func ResolveAnnonymousWithName[T any](name string, opts ...ResolutionOption) (T, error) {
 	rc := &resolutionContext{}
 	for _, opt := range opts {
 		opt(rc)
